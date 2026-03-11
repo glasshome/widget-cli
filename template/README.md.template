@@ -1,0 +1,107 @@
+# PROJECT_NAME
+
+PROJECT_DESCRIPTION
+
+A multi-widget project for the GlassHome dashboard.
+
+## Getting started
+
+### Install dependencies
+
+```bash
+bun install
+```
+
+### Build all widgets
+
+```bash
+bun run build
+```
+
+This produces `dist/{widget}.js` for each widget and generates `dist/registry.json`.
+
+### Watch mode (for development)
+
+```bash
+bun run dev
+```
+
+Continuously rebuilds all widgets on file change.
+
+### Serve built widgets locally
+
+```bash
+bun run serve
+```
+
+Serves the `dist/` directory at `http://localhost:5174` with CORS enabled.
+
+## Adding widgets
+
+Add a new widget to the project:
+
+```bash
+bun widget add
+```
+
+This creates `src/{widget-name}/index.tsx` and `src/{widget-name}/manifest.json`.
+
+## Project structure
+
+```
+PROJECT_NAME/
+  src/
+    {widget-name}/
+      index.tsx          # defineWidget() + component
+      manifest.json      # metadata for registry generation
+  dist/                  # after build
+    {widget-name}.js
+    registry.json        # auto-generated, lists all widgets
+```
+
+Each widget subdirectory contains:
+
+- **`index.tsx`** — SolidJS component + `defineWidget()` registration
+- **`manifest.json`** — metadata (tag, name, type, size, version)
+
+## CLI commands
+
+All commands are available via `bun widget`:
+
+```bash
+bun widget add                   # Add a new widget to the project
+bun widget connect <url>         # Test in a running dashboard
+bun widget validate [name]       # Validate all or a specific widget
+bun widget info [name]           # Show widget metadata and bundle info
+bun widget publish               # Build and show deployment instructions
+bun widget upgrade               # Upgrade @glasshome/widget-sdk
+```
+
+## Testing in the dashboard
+
+1. Start the dashboard dev server
+2. Connect your widgets:
+
+```bash
+bun widget connect http://localhost:3333
+```
+
+This builds all widgets, serves `dist/` locally, registers the registry URL with the dashboard, and watches for changes. Adding a new widget via `bun widget add` + save triggers a rebuild — no reconnect needed.
+
+## Publishing
+
+```bash
+bun widget validate
+bun widget publish
+```
+
+## SDK reference
+
+```tsx
+import {
+  defineWidget,       // Define and register a widget
+  getThemeToken,      // Read a CSS variable (e.g. getThemeToken("color-primary"))
+  isDark,             // Returns true if dark mode is active
+  createEntity,       // Create a reactive entity signal (SolidJS)
+} from "@glasshome/widget-sdk";
+```

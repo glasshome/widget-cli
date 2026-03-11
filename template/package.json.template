@@ -1,0 +1,25 @@
+{
+  "name": "PROJECT_NAME",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "PROJECT_DESCRIPTION",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "serve": "vite preview --port 5174 --host",
+    "widget": "glasshome-widget"
+  },
+  "peerDependencies": {
+    "solid-js": "^1.9.11",
+    "@glasshome/widget-sdk": "^0.2.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0",
+    "vite": "^7.3.1",
+    "vite-plugin-solid": "^2.11.10"
+  }
+}

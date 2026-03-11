@@ -1,0 +1,30 @@
+{
+  "name": "@glasshome/widget-cli",
+  "version": "0.1.0",
+  "description": "CLI for creating and managing GlassHome widgets",
+  "type": "module",
+  "bin": {
+    "create-glasshome-widget": "bin/create.ts",
+    "glasshome-widget": "bin/cli.ts"
+  },
+  "scripts": {
+    "create": "bun bin/create.ts",
+    "cli": "bun bin/cli.ts"
+  },
+  "files": [
+    "bin",
+    "src",
+    "template"
+  ],
+  "dependencies": {
+    "@clack/prompts": "^0.10.0",
+    "open": "^11.0.0",
+    "semver": "^7.6.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/glasshome-labs/widget-cli.git"
+  },
+  "author": "GlassHome Labs",
+  "license": "MIT"
+}

@@ -1,0 +1,49 @@
+import { defineWidget } from "@glasshome/widget-sdk";
+import { type Component, createSignal } from "solid-js";
+
+interface WidgetConfig {
+  label: string;
+}
+
+const WIDGET_NAMEWidget: Component<{ config: WidgetConfig }> = (props) => {
+  const [count, setCount] = createSignal(0);
+
+  return (
+    <div class="flex h-full w-full flex-col items-center justify-center gap-3">
+      <h3 class="text-sm font-medium text-muted-foreground">
+        {props.config.label || "WIDGET_NAME"}
+      </h3>
+      <p class="text-4xl font-bold">{count()}</p>
+      <button
+        type="button"
+        onClick={() => setCount((c) => c + 1)}
+        class="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+      >
+        Increment
+      </button>
+    </div>
+  );
+};
+
+export default defineWidget<"WIDGET_TYPE", WidgetConfig>({
+  manifest: {
+    tag: "WIDGET_TAG",
+    type: "WIDGET_TYPE",
+    name: "WIDGET_NAME",
+    size: "WIDGET_SIZE",
+    sdkVersion: "^0.2.0",
+    schema: {
+      type: "object",
+      properties: {
+        label: {
+          type: "string",
+          title: "Widget Label",
+          description: "Display label for the widget",
+          default: "WIDGET_NAME",
+        },
+      },
+    },
+    defaultConfig: { label: "WIDGET_NAME" },
+  },
+  component: WIDGET_NAMEWidget,
+});
