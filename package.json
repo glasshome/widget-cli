@@ -18,12 +18,32 @@
   ],
   "dependencies": {
     "@clack/prompts": "^0.10.0",
+    "@glasshome/widget-sdk": "^0.1.0",
     "open": "^11.0.0",
     "semver": "^7.6.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/glasshome-labs/widget-cli.git"
+    "url": "https://github.com/glasshome/widget-cli.git"
+  },
+  "keywords": [
+    "glasshome",
+    "widget",
+    "cli",
+    "scaffold",
+    "home-assistant",
+    "dashboard",
+    "smart-home"
+  ],
+  "homepage": "https://github.com/glasshome/widget-cli#readme",
+  "bugs": {
+    "url": "https://github.com/glasshome/widget-cli/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
   },
   "author": "GlassHome Labs",
   "license": "MIT"

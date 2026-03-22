@@ -9,7 +9,6 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch",
-    "serve": "vite preview --port 5174 --host",
     "widget": "glasshome-widget"
   },
   "peerDependencies": {

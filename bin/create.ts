@@ -202,15 +202,11 @@ try {
       log.info("  bun install");
     }
   }
-  log.info("  bun run dev              Watch-build all widgets for development");
-  log.info("  bun run build            Build all widgets + generate registry.json");
-  log.info("  bun run serve            Serve dist/ at http://localhost:5174");
-  log.info("");
-  log.step("CLI commands (run from your project directory):");
+  log.info("  bun widget connect <url>   Connect to a running dashboard for live testing");
   log.info("  bun widget add             Add another widget to the project");
-  log.info("  bun widget connect <url>   Test in a running dashboard");
+  log.info("  bun run build              Build all widgets + generate registry.json");
   log.info("  bun widget validate        Validate all widgets");
-  log.info("  bun widget publish         Build & show deployment info");
+  log.info("  bun widget publish         Build & publish to GlassHome Hub");
   log.info("  bun widget info            Show widget metadata");
   log.info("  bun widget upgrade         Upgrade @glasshome/widget-sdk");
 

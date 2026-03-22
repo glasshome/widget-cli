@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { cancel, isCancel, log, select, text } from "@clack/prompts";
+import { cancel, isCancel, log, text } from "@clack/prompts";
 
 /** Capitalize kebab-case into PascalCase for component names. */
 function capitalize(str: string): string {
@@ -16,12 +16,10 @@ export function scaffoldWidget(
   opts: {
     widgetName: string;
     tag: string;
-    widgetType: string;
-    widgetSize: string;
     description: string;
   },
 ): void {
-  const { widgetName, tag, widgetType, widgetSize, description } = opts;
+  const { widgetName, tag, description } = opts;
   const widgetDir = resolve(cwd, "src", widgetName);
 
   if (existsSync(widgetDir)) {
@@ -38,8 +36,6 @@ export function scaffoldWidget(
   let srcContent = readFileSync(resolve(templateDir, "src/index.tsx.template"), "utf-8");
   srcContent = srcContent.replace(/WIDGET_TAG/g, tag);
   srcContent = srcContent.replace(/WIDGET_NAME/g, displayName);
-  srcContent = srcContent.replace(/WIDGET_TYPE/g, widgetType);
-  srcContent = srcContent.replace(/WIDGET_SIZE/g, widgetSize);
   writeFileSync(resolve(widgetDir, "index.tsx"), srcContent);
 
   // Generate manifest.json
@@ -47,8 +43,8 @@ export function scaffoldWidget(
     tag,
     name: displayName,
     description: widgetDescription,
-    type: widgetType,
-    size: widgetSize,
+    minSize: { w: 1, h: 1 },
+    maxSize: { w: 4, h: 4 },
     sdkVersion: "^0.2.0",
     version: "0.1.0",
   };
@@ -59,8 +55,6 @@ export function scaffoldWidget(
 export async function promptWidgetDetails(defaults?: { widgetName?: string }): Promise<{
   widgetName: string;
   tag: string;
-  widgetType: string;
-  widgetSize: string;
   description: string;
 } | null> {
   const widgetName = await text({
@@ -97,32 +91,6 @@ export async function promptWidgetDetails(defaults?: { widgetName?: string }): P
     return null;
   }
 
-  const widgetType = await select({
-    message: "Widget type",
-    options: [
-      { value: "status", label: "Status", hint: "displays a value or state" },
-      { value: "chart", label: "Chart", hint: "visualizes data" },
-      { value: "control", label: "Control", hint: "interactive controls" },
-    ],
-  });
-  if (isCancel(widgetType)) {
-    cancel("Operation cancelled.");
-    return null;
-  }
-
-  const widgetSize = await select({
-    message: "Widget size",
-    options: [
-      { value: "small", label: "Small", hint: "1x1 grid cell" },
-      { value: "medium", label: "Medium", hint: "2x1 grid cells" },
-      { value: "large", label: "Large", hint: "2x2 grid cells" },
-    ],
-  });
-  if (isCancel(widgetSize)) {
-    cancel("Operation cancelled.");
-    return null;
-  }
-
   const description = await text({
     message: "Description (optional)",
     placeholder: "A GlassHome dashboard widget",
@@ -136,8 +104,6 @@ export async function promptWidgetDetails(defaults?: { widgetName?: string }): P
   return {
     widgetName: widgetName as string,
     tag: tag as string,
-    widgetType: widgetType as string,
-    widgetSize: widgetSize as string,
     description: description as string,
   };
 }

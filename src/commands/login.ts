@@ -31,7 +31,7 @@ export async function runLogin(hubUrl?: string): Promise<void> {
   }>((resolve, reject) => {
     const timeout = setTimeout(() => {
       server.close();
-      reject(new Error("Login timed out after 120 seconds"));
+      reject(new Error("Login timed out — no response from browser within 120 seconds."));
     }, LOGIN_TIMEOUT_MS);
 
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
@@ -49,7 +49,7 @@ export async function runLogin(hubUrl?: string): Promise<void> {
 
       if (error) {
         res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(`<html><head><script>window.close()</script></head><body></body></html>`);
+        res.end("<html><head><script>window.close()</script></head><body></body></html>");
         clearTimeout(timeout);
         server.close();
         reject(new Error(`OAuth error: ${error}`));
@@ -63,7 +63,7 @@ export async function runLogin(hubUrl?: string): Promise<void> {
       }
 
       res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(`<html><head><script>window.close()</script></head><body></body></html>`);
+      res.end("<html><head><script>window.close()</script></head><body></body></html>");
 
       clearTimeout(timeout);
       server.close();
@@ -87,6 +87,8 @@ export async function runLogin(hubUrl?: string): Promise<void> {
       });
     });
   });
+
+  s.stop("Login complete");
 
   // Verify state
   if (receivedState !== state) {

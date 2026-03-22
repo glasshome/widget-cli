@@ -5,8 +5,8 @@ import { gzipSync } from "node:zlib";
 export interface WidgetManifest {
   tag: string;
   name: string;
-  type: string;
-  size: string;
+  minSize: { w: number; h: number };
+  maxSize: { w: number; h: number };
   sdkVersion: string;
   version?: string;
   description?: string;

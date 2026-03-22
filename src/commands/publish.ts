@@ -3,8 +3,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { cancel, isCancel, log, multiselect, select, spinner } from "@clack/prompts";
 import semver from "semver";
-import { getHubUrl, getScope, getToken } from "../utils/auth";
-import { confirmPublish, requestPublish, uploadToR2 } from "../utils/hub-api";
+import { getHubUrl, getToken } from "../utils/auth";
+import { confirmPublish, fetchScopes, requestPublish, uploadToR2 } from "../utils/hub-api";
 import {
   discoverWidgets,
   formatBytes,
@@ -94,7 +94,9 @@ export async function runPublish(cwd: string): Promise<void> {
       const info = getWidgetBundleInfo(cwd, name);
       sizeInfo = ` — ${formatBytes(info.raw)} (${formatBytes(info.gzip)} gzipped)`;
     } catch {}
-    log.info(`  ${manifest.tag} [${manifest.type}/${manifest.size}]${sizeInfo}`);
+    log.info(
+      `  ${manifest.tag} [${manifest.minSize.w}x${manifest.minSize.h} - ${manifest.maxSize.w}x${manifest.maxSize.h}]${sizeInfo}`,
+    );
   }
 
   // Step 6: Authenticate with Hub
@@ -103,7 +105,12 @@ export async function runPublish(cwd: string): Promise<void> {
 
   if (!token) {
     log.warn("Not authenticated with Hub. Starting login...");
-    await runLogin(hubUrl);
+    try {
+      await runLogin(hubUrl);
+    } catch (err) {
+      log.error(err instanceof Error ? err.message : "Login failed.");
+      process.exit(1);
+    }
     token = await getToken(hubUrl);
     if (!token) {
       log.error("Authentication failed. Run `bun widget login` manually.");
@@ -111,10 +118,33 @@ export async function runPublish(cwd: string): Promise<void> {
     }
   }
 
-  const scope = getScope();
-  if (!scope) {
-    log.error("No scope found. Run `bun widget login` first.");
+  // Fetch available scopes from hub
+  const scopes = await fetchScopes(hubUrl, token!);
+  if (scopes.length === 0) {
+    log.error("No publishing scopes available. Ensure your account is properly set up.");
     process.exit(1);
+  }
+
+  let scope: string;
+  if (scopes.length === 1) {
+    const only = scopes[0]!;
+    scope = only.name;
+    log.info(`Publishing as @${scope} (${only.type})`);
+  } else {
+    const choice = await select({
+      message: "Publish under which scope?",
+      options: scopes.map((s) => ({
+        value: s.name,
+        label: s.type === "personal" ? `@${s.name} (personal)` : `@${s.name} (${s.displayName})`,
+      })),
+    });
+
+    if (isCancel(choice)) {
+      cancel("Publish cancelled.");
+      process.exit(0);
+    }
+
+    scope = choice as string;
   }
 
   // Step 7: Select widgets to publish
@@ -122,7 +152,7 @@ export async function runPublish(cwd: string): Promise<void> {
     const manifest = readManifest(cwd, name);
     return {
       value: name,
-      label: `${manifest.tag} (${manifest.type}/${manifest.size})`,
+      label: `${manifest.tag} (${manifest.minSize.w}x${manifest.minSize.h} - ${manifest.maxSize.w}x${manifest.maxSize.h})`,
     };
   });
 
@@ -172,8 +202,8 @@ export async function runPublish(cwd: string): Promise<void> {
         name: widgetName,
         displayName: manifest.name,
         description: manifest.description,
-        type: manifest.type,
-        size: manifest.size,
+        minSize: manifest.minSize,
+        maxSize: manifest.maxSize,
         sdkVersion: manifest.sdkVersion,
         version,
         bundleSize: bundleBuffer.byteLength,

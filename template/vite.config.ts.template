@@ -4,9 +4,4 @@ import { glasshomeWidgets } from "@glasshome/widget-sdk/vite";
 
 export default defineConfig({
   plugins: [solid(), ...glasshomeWidgets()],
-  preview: {
-    port: 5174,
-    host: true,
-    cors: true,
-  },
 });

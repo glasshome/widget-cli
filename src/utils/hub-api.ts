@@ -1,11 +1,28 @@
+interface PublishScope {
+  name: string;
+  type: "personal" | "organization";
+  displayName: string;
+}
+
+export async function fetchScopes(hubUrl: string, token: string): Promise<PublishScope[]> {
+  const res = await fetch(`${hubUrl}/api/widgets/scopes`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw Object.assign(new Error("Failed to fetch scopes"), { status: res.status });
+  }
+  const data = (await res.json()) as { scopes: PublishScope[] };
+  return data.scopes;
+}
+
 interface PublishRequestParams {
   scope: string;
   name: string;
   displayName: string;
   description?: string;
   icon?: string;
-  type: string;
-  size: string;
+  minSize: { w: number; h: number };
+  maxSize: { w: number; h: number };
   sdkVersion: string;
   version: string;
   bundleSize: number;
@@ -74,10 +91,7 @@ export async function confirmPublish(
   return res.json() as Promise<PublishConfirmResponse>;
 }
 
-export async function uploadToR2(
-  uploadUrl: string,
-  bundleBuffer: Buffer,
-): Promise<void> {
+export async function uploadToR2(uploadUrl: string, bundleBuffer: Buffer): Promise<void> {
   const res = await fetch(uploadUrl, {
     method: "PUT",
     headers: { "Content-Type": "application/javascript" },

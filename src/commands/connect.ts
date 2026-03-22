@@ -1,31 +1,105 @@
-import { existsSync, readdirSync, statSync } from "node:fs";
-import { networkInterfaces } from "node:os";
-import { join, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync, watch } from "node:fs";
+import { resolve } from "node:path";
 import { log, spinner } from "@clack/prompts";
+import { buildWidgets } from "@glasshome/widget-sdk/vite";
+import { trpcMutate, trpcQuery } from "../utils/api";
 
-function getLanIp(): string {
-  const nets = networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name] ?? []) {
-      // Skip internal and non-IPv4 addresses
-      if (!net.internal && net.family === "IPv4") {
-        return net.address;
-      }
-    }
+interface RegistryWidget {
+  tag: string;
+  name: string;
+  version: string;
+  bundleUrl: string;
+  sdkVersion: string;
+  [key: string]: unknown;
+}
+
+interface RegistryJson {
+  version: number;
+  widgets: RegistryWidget[];
+}
+
+/**
+ * Upload a single widget bundle to the API and register it.
+ */
+async function uploadAndRegister(
+  apiUrl: string,
+  distDir: string,
+  widget: RegistryWidget,
+): Promise<void> {
+  const api = apiUrl.replace(/\/$/, "");
+
+  // Read the bundle file from dist/ (bundleUrl is relative like "./area.js")
+  const bundleFilename = widget.bundleUrl.replace(/^\.\//, "");
+  const bundlePath = resolve(distDir, bundleFilename);
+
+  if (!existsSync(bundlePath)) {
+    log.warn(`Bundle not found: ${bundlePath} — skipping ${widget.tag}`);
+    return;
   }
-  return "127.0.0.1";
+
+  const bundleContent = readFileSync(bundlePath, "utf-8");
+
+  // Upload bundle to API
+  const uploadRes = await fetch(`${api}/bundles/${widget.tag}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/javascript" },
+    body: bundleContent,
+  });
+
+  if (!uploadRes.ok) {
+    throw new Error(`Failed to upload bundle for ${widget.tag}: HTTP ${uploadRes.status}`);
+  }
+
+  // Register the widget with a local bundle path (skips redundant download)
+  const manifest = { ...widget };
+  delete (manifest as Record<string, unknown>).bundleUrl;
+
+  await trpcMutate({
+    apiUrl: api,
+    path: "widget.register",
+    input: {
+      tag: widget.tag,
+      name: widget.name,
+      version: widget.version,
+      bundleUrl: `/bundles/${widget.tag}/bundle.js`,
+      manifestJson: JSON.stringify(manifest),
+    },
+  });
+}
+
+/**
+ * Read registry.json and upload all widget bundles.
+ * @returns Array of widget tags that were registered
+ */
+async function uploadAllWidgets(apiUrl: string, distDir: string): Promise<string[]> {
+  const registryPath = resolve(distDir, "registry.json");
+  const registry: RegistryJson = JSON.parse(readFileSync(registryPath, "utf-8"));
+  const tags: string[] = [];
+
+  for (const widget of registry.widgets) {
+    await uploadAndRegister(apiUrl, distDir, widget);
+    tags.push(widget.tag);
+  }
+
+  return tags;
 }
 
 export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
   const distDir = resolve(cwd, "dist");
+  const solid = (await import("vite-plugin-solid")).default;
+  const buildOpts = { srcDir: "src", outDir: "dist", plugins: [solid()] };
 
-  // Step 1: Initial build (generates dist/*.js + dist/registry.json)
+  // Step 1: Initial build
   const s = spinner();
   s.start("Building widgets...");
-  const buildProc = Bun.spawnSync(["bun", "run", "build"], { cwd });
-  if (buildProc.exitCode !== 0) {
+  try {
+    const origCwd = process.cwd();
+    process.chdir(cwd);
+    await buildWidgets(buildOpts);
+    process.chdir(origCwd);
+  } catch (err) {
     s.stop("Build failed");
-    log.error(buildProc.stderr.toString());
+    log.error(err instanceof Error ? err.message : String(err));
     process.exit(1);
   }
   s.stop("Build complete");
@@ -37,104 +111,58 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
     process.exit(1);
   }
 
-  // Step 3: Start local HTTP server serving entire dist/ directory
-  const lanIp = getLanIp();
-  const server = Bun.serve({
-    port: 0, // let OS pick a free port
-    fetch(req) {
-      const url = new URL(req.url);
-
-      // CORS preflight
-      if (req.method === "OPTIONS") {
-        return new Response(null, {
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
-          },
-        });
-      }
-
-      // Serve any file from dist/
-      const pathname = url.pathname === "/" ? "/registry.json" : url.pathname;
-      const filePath = join(distDir, pathname.slice(1));
-
-      // Prevent directory traversal
-      if (!filePath.startsWith(distDir)) {
-        return new Response("Forbidden", { status: 403 });
-      }
-
-      if (existsSync(filePath) && statSync(filePath).isFile()) {
-        const file = Bun.file(filePath);
-        const contentType = filePath.endsWith(".js")
-          ? "application/javascript"
-          : filePath.endsWith(".json")
-            ? "application/json"
-            : "application/octet-stream";
-
-        return new Response(file, {
-          headers: {
-            "Content-Type": contentType,
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
-            "Cache-Control": "no-cache",
-          },
-        });
-      }
-
-      return new Response("Not Found", { status: 404 });
-    },
-  });
-
-  const registryUrl = `http://${lanIp}:${server.port}/registry.json`;
-  log.info(`Serving dist/ at http://${lanIp}:${server.port}/`);
-  log.info(`Registry URL: ${registryUrl}`);
-
-  // Step 4: Enable dev mode + register registry URL with dashboard API
-  s.start("Registering registry with dashboard...");
+  // Step 3: Enable dev mode if needed
+  s.start("Registering widgets with dashboard...");
   try {
-    // Check/enable dev mode
-    const configRes = await fetch(`${apiUrl.replace(/\/$/, "")}/trpc/appConfig.get`);
-    if (configRes.ok) {
-      const configData = (await configRes.json()) as { result: { data: { devMode: boolean } } };
-      if (!configData.result.data.devMode) {
-        await fetch(`${apiUrl.replace(/\/$/, "")}/trpc/appConfig.toggleDevMode`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        });
-      }
-    }
-
-    // Register the registry
-    const res = await fetch(`${apiUrl.replace(/\/$/, "")}/dev/registries`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: registryUrl, name: "Local Dev Server" }),
+    const configData = await trpcQuery<{ devMode: boolean }>({
+      apiUrl: apiUrl.replace(/\/$/, ""),
+      path: "appConfig.get",
     });
 
-    if (res.ok || res.status === 409) {
-      s.stop("Registry registered");
-    } else {
-      const err = (await res.json()) as { error: string };
-      s.stop("Registration failed");
-      log.error(`Failed to register registry: ${err.error}`);
-      server.stop();
-      process.exit(1);
+    if (!configData.devMode) {
+      await trpcMutate({
+        apiUrl: apiUrl.replace(/\/$/, ""),
+        path: "appConfig.toggleDevMode",
+        input: {},
+      });
     }
-  } catch (err) {
-    s.stop("Registration failed");
-    log.error(`Failed to register: ${err instanceof Error ? err.message : String(err)}`);
-    server.stop();
-    process.exit(1);
+  } catch {
+    // Non-fatal — dev mode may already be enabled
   }
 
-  // Step 5: Start vite build --watch for auto-rebuild
-  const watchProc = Bun.spawn(["bunx", "vite", "build", "--watch"], {
-    cwd,
-    stdout: "ignore",
-    stderr: "ignore",
+  // Step 4: Upload bundles and register widgets
+  const registeredTags = await uploadAllWidgets(apiUrl, distDir);
+  s.stop("Widgets registered");
+
+  // Step 5: Watch src/ for changes and rebuild + re-upload only the changed widget
+  const srcDir = resolve(cwd, "src");
+  let rebuilding = false;
+  const watcher = watch(srcDir, { recursive: true }, async (_event, filename) => {
+    if (rebuilding || !filename) return;
+    rebuilding = true;
+    try {
+      // Determine which widget changed from the file path (first path segment under src/)
+      const widgetName = filename.split(/[\\/]/)[0] ?? filename;
+      const origCwd = process.cwd();
+      process.chdir(cwd);
+      await buildWidgets({ ...buildOpts, only: [widgetName] });
+      process.chdir(origCwd);
+
+      // Upload only the changed widget
+      const registryPath = resolve(distDir, "registry.json");
+      const registry: RegistryJson = JSON.parse(readFileSync(registryPath, "utf-8"));
+      const widget = registry.widgets.find((w) => w.bundleUrl === `./${widgetName}.js`);
+      if (widget) {
+        await uploadAndRegister(apiUrl, distDir, widget);
+        log.info(`Rebuilt & uploaded ${widget.tag}`);
+      } else {
+        log.warn(`No registry entry for ${widgetName} — skipping upload`);
+      }
+    } catch (err) {
+      log.warn(`Rebuild failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      rebuilding = false;
+    }
   });
 
   // Count widgets
@@ -147,25 +175,28 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
     : 0;
 
   log.success(`Connected! ${widgetCount} widget(s) are live.`);
-  log.info("Dashboard will discover widgets via registry.json.");
-  log.info("File changes auto-rebuild. Add widgets with `bun widget add`.");
+  log.info("Bundles uploaded to API. Widgets registered with local paths.");
+  log.info("File changes auto-rebuild and re-upload. Add widgets with `bun widget add`.");
   log.info("Press Ctrl+C to disconnect.");
 
   // Step 6: Handle SIGINT — unregister and clean up
   const cleanup = async () => {
     log.info("\nDisconnecting...");
-    try {
-      await fetch(`${apiUrl.replace(/\/$/, "")}/dev/registries`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: registryUrl }),
-      });
-      log.info("Registry unregistered");
-    } catch {
-      log.warn("Could not unregister registry (API may be down)");
+    watcher.close();
+
+    for (const tag of registeredTags) {
+      try {
+        await trpcMutate({
+          apiUrl: apiUrl.replace(/\/$/, ""),
+          path: "widget.unregister",
+          input: { tag },
+        });
+      } catch {
+        // Non-fatal — API may be down
+      }
     }
-    watchProc.kill();
-    server.stop();
+    log.info("Widgets unregistered");
+
     process.exit(0);
   };
 

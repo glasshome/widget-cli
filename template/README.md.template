@@ -20,22 +20,6 @@ bun run build
 
 This produces `dist/{widget}.js` for each widget and generates `dist/registry.json`.
 
-### Watch mode (for development)
-
-```bash
-bun run dev
-```
-
-Continuously rebuilds all widgets on file change.
-
-### Serve built widgets locally
-
-```bash
-bun run serve
-```
-
-Serves the `dist/` directory at `http://localhost:5174` with CORS enabled.
-
 ## Adding widgets
 
 Add a new widget to the project:
@@ -45,6 +29,16 @@ bun widget add
 ```
 
 This creates `src/{widget-name}/index.tsx` and `src/{widget-name}/manifest.json`.
+
+## Testing in the dashboard
+
+Connect your widgets to a running GlassHome instance:
+
+```bash
+bun widget connect http://<dashboard-api-host>:3333
+```
+
+This builds all widgets, serves them on your LAN IP, registers them with the dashboard, and watches for file changes. Widgets hot-reload as you edit.
 
 ## Project structure
 
@@ -73,20 +67,9 @@ bun widget add                   # Add a new widget to the project
 bun widget connect <url>         # Test in a running dashboard
 bun widget validate [name]       # Validate all or a specific widget
 bun widget info [name]           # Show widget metadata and bundle info
-bun widget publish               # Build and show deployment instructions
+bun widget publish               # Build and publish to GlassHome Hub
 bun widget upgrade               # Upgrade @glasshome/widget-sdk
 ```
-
-## Testing in the dashboard
-
-1. Start the dashboard dev server
-2. Connect your widgets:
-
-```bash
-bun widget connect http://localhost:3333
-```
-
-This builds all widgets, serves `dist/` locally, registers the registry URL with the dashboard, and watches for changes. Adding a new widget via `bun widget add` + save triggers a rebuild — no reconnect needed.
 
 ## Publishing
 

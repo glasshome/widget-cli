@@ -10,8 +10,6 @@ import {
   type WidgetManifest,
 } from "../utils/manifest";
 
-const VALID_TYPES = ["chart", "status", "control"];
-const VALID_SIZES = ["small", "medium", "large"];
 const TAG_REGEX = /^[a-z][a-z0-9]*(-[a-z0-9]+)+$/;
 
 interface ValidationResult {
@@ -27,8 +25,6 @@ function validateManifest(manifest: WidgetManifest): ValidationResult {
   // Required fields
   if (!manifest.tag) errors.push("Missing required field: tag");
   if (!manifest.name) errors.push("Missing required field: name");
-  if (!manifest.type) errors.push("Missing required field: type");
-  if (!manifest.size) errors.push("Missing required field: size");
   if (!manifest.sdkVersion) errors.push("Missing required field: sdkVersion");
 
   // Tag format
@@ -38,14 +34,24 @@ function validateManifest(manifest: WidgetManifest): ValidationResult {
     );
   }
 
-  // Type validation
-  if (manifest.type && !VALID_TYPES.includes(manifest.type)) {
-    errors.push(`Invalid type "${manifest.type}" — must be one of: ${VALID_TYPES.join(", ")}`);
+  // minSize validation
+  if (
+    !manifest.minSize ||
+    typeof manifest.minSize !== "object" ||
+    typeof manifest.minSize.w !== "number" ||
+    typeof manifest.minSize.h !== "number"
+  ) {
+    errors.push("minSize must be an object with numeric w and h properties");
   }
 
-  // Size validation
-  if (manifest.size && !VALID_SIZES.includes(manifest.size)) {
-    errors.push(`Invalid size "${manifest.size}" — must be one of: ${VALID_SIZES.join(", ")}`);
+  // maxSize validation
+  if (
+    !manifest.maxSize ||
+    typeof manifest.maxSize !== "object" ||
+    typeof manifest.maxSize.w !== "number" ||
+    typeof manifest.maxSize.h !== "number"
+  ) {
+    errors.push("maxSize must be an object with numeric w and h properties");
   }
 
   // Schema validation

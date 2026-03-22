@@ -4,6 +4,12 @@ import { resolve } from "node:path";
 import { intro, log, outro } from "@clack/prompts";
 
 function resolveWidgetDir(): string {
+  if (explicitDir) {
+    const dir = resolve(process.cwd(), explicitDir);
+    if (existsSync(resolve(dir, "src"))) return dir;
+    log.error(`No src/ directory found in ${dir}`);
+    process.exit(1);
+  }
   const cwd = process.cwd();
   if (existsSync(resolve(cwd, "src"))) return cwd;
   const sibling = resolve(cwd, "../widgets");
@@ -12,12 +18,12 @@ function resolveWidgetDir(): string {
 }
 
 const HELP = `
-glasshome-widget <command> [options]
+glasshome-widget <command> [--dir <path>] [options]
 
 Commands:
   add                    Add a new widget to the project
+  build                  Build all widgets (per-widget, self-contained bundles)
   connect <url>          Connect to a running dashboard for live testing
-  add-dev-registry [url] Add a local dev server as a widget registry
   validate [name]        Validate all widgets or a specific one
   publish                Build all widgets and publish to Hub
   login [hub-url]        Authenticate with GlassHome Hub
@@ -25,14 +31,10 @@ Commands:
   upgrade                Upgrade @glasshome/widget-sdk to latest version
   help                   Show this help message
 
-Options for add-dev-registry:
-  [url]              Registry URL (default: http://localhost:5173/__widgets/registry.json)
-  --api-url <url>    Dashboard API URL (default: http://localhost:3333)
-
 Examples:
   glasshome-widget add
+  glasshome-widget build
   glasshome-widget connect http://localhost:3333
-  glasshome-widget add-dev-registry
   glasshome-widget validate
   glasshome-widget validate clock
   glasshome-widget info
@@ -41,9 +43,17 @@ Examples:
   glasshome-widget login
   glasshome-widget login https://my-hub.example.com
   glasshome-widget upgrade
+  glasshome-widget publish --dir packages/widgets
 `.trim();
 
-const [command, ...args] = process.argv.slice(2);
+const rawArgs = process.argv.slice(2);
+const dirFlagIdx = rawArgs.indexOf("--dir");
+let explicitDir: string | undefined;
+if (dirFlagIdx !== -1) {
+  explicitDir = rawArgs[dirFlagIdx + 1];
+  rawArgs.splice(dirFlagIdx, 2);
+}
+const [command, ...args] = rawArgs;
 
 if (!command || command === "help" || command === "--help" || command === "-h") {
   console.log(HELP);
@@ -60,6 +70,13 @@ switch (command) {
     break;
   }
 
+  case "build": {
+    const { runBuild } = await import("../src/commands/build");
+    await runBuild(resolveWidgetDir());
+    outro("Done");
+    break;
+  }
+
   case "connect": {
     const url = args[0];
     if (!url) {
@@ -69,15 +86,6 @@ switch (command) {
     }
     const { runConnect } = await import("../src/commands/connect");
     await runConnect(url, resolveWidgetDir());
-    break;
-  }
-
-  case "add-dev-registry": {
-    const registryUrl = args[0]?.startsWith("--") ? undefined : args[0];
-    const apiUrlIdx = args.indexOf("--api-url");
-    const apiUrl = apiUrlIdx >= 0 ? args[apiUrlIdx + 1] : undefined;
-    const { runAddDevRegistry } = await import("../src/commands/dev-registry");
-    await runAddDevRegistry({ registryUrl, apiUrl });
     break;
   }
 
@@ -93,8 +101,13 @@ switch (command) {
   case "login": {
     const loginHubUrl = args[0];
     const { runLogin } = await import("../src/commands/login");
-    await runLogin(loginHubUrl);
-    outro("Done");
+    try {
+      await runLogin(loginHubUrl);
+      outro("Done");
+    } catch (err) {
+      log.error(err instanceof Error ? err.message : "Login failed.");
+      process.exit(1);
+    }
     break;
   }
 
