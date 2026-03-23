@@ -14,7 +14,7 @@ import {
 } from "../utils/manifest";
 import { runLogin } from "./login";
 
-export async function runPublish(cwd: string): Promise<void> {
+export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<void> {
   // Step 1: Validate all widgets
   log.info("Running validation...");
   const { runValidate } = await import("./validate");
@@ -33,7 +33,7 @@ export async function runPublish(cwd: string): Promise<void> {
   const bump = await select({
     message: `Current version: ${currentVersion}. Bump version?`,
     options: [
-      { value: "keep", label: `Keep ${currentVersion}` },
+      { value: "keep", label: `Keep ${currentVersion}`, hint: "fails if already published" },
       {
         value: "patch",
         label: `Patch (${semver.inc(currentVersion, "patch")})`,
@@ -100,7 +100,8 @@ export async function runPublish(cwd: string): Promise<void> {
   }
 
   // Step 6: Authenticate with Hub
-  const hubUrl = getHubUrl();
+  const hubUrl = hubUrlOverride ?? getHubUrl();
+  log.info(`Hub: ${hubUrl}`);
   let token = await getToken(hubUrl);
 
   if (!token) {

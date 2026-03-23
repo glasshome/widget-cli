@@ -1,6 +1,6 @@
 {
   "name": "@glasshome/widget-cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "CLI for creating and managing GlassHome widgets",
   "type": "module",
   "bin": {
