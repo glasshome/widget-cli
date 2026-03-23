@@ -21,6 +21,7 @@ const HELP = `
 glasshome-widget <command> [--dir <path>] [options]
 
 Commands:
+  create                 Create a new widget project (default when no project found)
   add                    Add a new widget to the project
   build                  Build all widgets (per-widget, self-contained bundles)
   connect <url>          Connect to a running dashboard for live testing
@@ -32,6 +33,8 @@ Commands:
   help                   Show this help message
 
 Examples:
+  glasshome-widget                              Create a new widget project
+  glasshome-widget create                       Create a new widget project
   glasshome-widget add
   glasshome-widget build
   glasshome-widget connect http://localhost:3333
@@ -55,14 +58,29 @@ if (dirFlagIdx !== -1) {
 }
 const [command, ...args] = rawArgs;
 
-if (!command || command === "help" || command === "--help" || command === "-h") {
+if (command === "help" || command === "--help" || command === "-h") {
   console.log(HELP);
   process.exit(0);
 }
 
-intro(`glasshome-widget ${command}`);
+// No command: if inside a widget project show help, otherwise run create
+const effectiveCommand = command ?? (existsSync(resolve(process.cwd(), "src")) ? "help" : "create");
 
-switch (command) {
+if (effectiveCommand === "help") {
+  console.log(HELP);
+  process.exit(0);
+}
+
+intro(`glasshome-widget ${effectiveCommand}`);
+
+switch (effectiveCommand) {
+  case "create": {
+    const { runCreate } = await import("../src/commands/create");
+    await runCreate();
+    outro("Happy building!");
+    break;
+  }
+
   case "add": {
     const { runAdd } = await import("../src/commands/add");
     await runAdd(resolveWidgetDir());
