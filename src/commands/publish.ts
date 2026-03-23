@@ -15,91 +15,17 @@ import {
 import { runLogin } from "./login";
 
 export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<void> {
-  // Step 1: Validate all widgets
-  log.info("Running validation...");
+  const s = spinner();
+
+  // Step 1: Validate (quiet — only show summary)
   const { runValidate } = await import("./validate");
-  const valid = await runValidate(cwd);
+  const valid = await runValidate(cwd, undefined, { quiet: true });
   if (!valid) {
     log.error("Fix validation errors before publishing.");
     process.exit(1);
   }
 
-  // Step 2: Read package.json
-  const pkgPath = resolve(cwd, "package.json");
-  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-  const currentVersion = pkg.version ?? "0.0.0";
-
-  // Step 3: Version bump prompt
-  const bump = await select({
-    message: `Current version: ${currentVersion}. Bump version?`,
-    options: [
-      { value: "keep", label: `Keep ${currentVersion}`, hint: "fails if already published" },
-      {
-        value: "patch",
-        label: `Patch (${semver.inc(currentVersion, "patch")})`,
-      },
-      {
-        value: "minor",
-        label: `Minor (${semver.inc(currentVersion, "minor")})`,
-      },
-      {
-        value: "major",
-        label: `Major (${semver.inc(currentVersion, "major")})`,
-      },
-    ],
-  });
-
-  if (isCancel(bump)) {
-    cancel("Publish cancelled.");
-    process.exit(0);
-  }
-
-  let version = currentVersion;
-  if (bump !== "keep") {
-    version = semver.inc(currentVersion, bump as "patch" | "minor" | "major") ?? currentVersion;
-
-    pkg.version = version;
-    writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
-
-    const allWidgets = discoverWidgets(cwd);
-    for (const name of allWidgets) {
-      const manifest = readManifest(cwd, name);
-      manifest.version = version;
-      writeManifest(cwd, name, manifest);
-    }
-
-    log.info(`Version bumped to ${version}`);
-  }
-
-  // Step 4: Rebuild
-  const s = spinner();
-  s.start("Building widgets...");
-  const buildProc = Bun.spawnSync(["bun", "run", "build"], { cwd });
-  if (buildProc.exitCode !== 0) {
-    s.stop("Build failed");
-    log.error(buildProc.stderr.toString());
-    process.exit(1);
-  }
-  s.stop("Build complete");
-
-  // Step 5: Show summary
-  const widgets = discoverWidgets(cwd);
-  log.success(`Ready for publishing: ${pkg.name}@${version}`);
-  log.info("");
-
-  for (const name of widgets) {
-    const manifest = readManifest(cwd, name);
-    let sizeInfo = "";
-    try {
-      const info = getWidgetBundleInfo(cwd, name);
-      sizeInfo = ` — ${formatBytes(info.raw)} (${formatBytes(info.gzip)} gzipped)`;
-    } catch {}
-    log.info(
-      `  ${manifest.tag} [${manifest.minSize.w}x${manifest.minSize.h} - ${manifest.maxSize.w}x${manifest.maxSize.h}]${sizeInfo}`,
-    );
-  }
-
-  // Step 6: Authenticate with Hub
+  // Step 2: Authenticate with Hub
   const hubUrl = hubUrlOverride ?? getHubUrl();
   log.info(`Hub: ${hubUrl}`);
   let token = await getToken(hubUrl);
@@ -114,7 +40,7 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
     }
     token = await getToken(hubUrl);
     if (!token) {
-      log.error("Authentication failed. Run `bun widget login` manually.");
+      log.error("Authentication failed. Run `glasshome-widget login` manually.");
       process.exit(1);
     }
   }
@@ -148,12 +74,18 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
     scope = choice as string;
   }
 
-  // Step 7: Select widgets to publish
+  // Step 3: Select widgets to publish
+  const widgets = discoverWidgets(cwd);
   const widgetOptions = widgets.map((name) => {
     const manifest = readManifest(cwd, name);
+    let sizeInfo = "";
+    try {
+      const info = getWidgetBundleInfo(cwd, name);
+      sizeInfo = ` — ${formatBytes(info.raw)}`;
+    } catch {}
     return {
       value: name,
-      label: `${manifest.tag} (${manifest.minSize.w}x${manifest.minSize.h} - ${manifest.maxSize.w}x${manifest.maxSize.h})`,
+      label: `${manifest.tag}${sizeInfo}`,
     };
   });
 
@@ -174,7 +106,62 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
     return;
   }
 
-  // Step 8: Publish each selected widget
+  // Step 4: Version bump (applied only to selected widgets)
+  const pkgPath = resolve(cwd, "package.json");
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+  const currentVersion = pkg.version ?? "0.0.0";
+
+  const bump = await select({
+    message: `Current version: ${currentVersion}. Bump version?`,
+    options: [
+      { value: "keep", label: `Keep ${currentVersion}`, hint: "fails if already published" },
+      {
+        value: "patch",
+        label: `Patch (${semver.inc(currentVersion, "patch")})`,
+      },
+      {
+        value: "minor",
+        label: `Minor (${semver.inc(currentVersion, "minor")})`,
+      },
+      {
+        value: "major",
+        label: `Major (${semver.inc(currentVersion, "major")})`,
+      },
+    ],
+  });
+
+  if (isCancel(bump)) {
+    cancel("Publish cancelled.");
+    process.exit(0);
+  }
+
+  let version = currentVersion;
+  if (bump !== "keep") {
+    version = semver.inc(currentVersion, bump as "patch" | "minor" | "major") ?? currentVersion;
+
+    pkg.version = version;
+    writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+
+    for (const name of selectedWidgets) {
+      const manifest = readManifest(cwd, name);
+      manifest.version = version;
+      writeManifest(cwd, name, manifest);
+    }
+
+    log.info(`Version bumped to ${version}`);
+  }
+
+  // Step 5: Rebuild
+  s.start("Building widgets...");
+  const buildProc = Bun.spawnSync(["bun", "run", "build"], { cwd });
+  if (buildProc.exitCode !== 0) {
+    s.stop("Build failed");
+    log.error(buildProc.stderr.toString());
+    process.exit(1);
+  }
+  s.stop("Build complete");
+
+  // Step 6: Publish each selected widget
   const published: Array<{ name: string; cdnUrl: string }> = [];
   const skipped: Array<{ name: string; reason: string }> = [];
 
@@ -190,12 +177,10 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
       continue;
     }
 
-    // Compute SHA-256 hash
     const sha256Hash = createHash("sha256").update(bundleBuffer).digest("hex");
 
     s.start(`Publishing ${manifest.tag}@${version}...`);
 
-    // Request publish (get presigned URL)
     let publishData: Awaited<ReturnType<typeof requestPublish>>;
     try {
       publishData = await requestPublish(hubUrl, token!, {
@@ -214,8 +199,7 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
     } catch (err: any) {
       if (err.status === 409) {
         s.stop(`Skipped ${manifest.tag}@${version}`);
-        log.warn(`${manifest.tag}@${version}: already published (immutable)`);
-        skipped.push({ name: manifest.tag, reason: "version already exists" });
+        skipped.push({ name: manifest.tag, reason: "already published" });
         continue;
       }
       s.stop(`Failed ${manifest.tag}`);
@@ -223,8 +207,7 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
       continue;
     }
 
-    // Upload to R2
-    s.message(`Uploading ${manifest.tag} to CDN...`);
+    s.message(`Uploading ${manifest.tag}...`);
     try {
       await uploadToR2(publishData.uploadUrl, bundleBuffer);
     } catch (err: any) {
@@ -233,7 +216,6 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
       continue;
     }
 
-    // Confirm publish
     s.message(`Confirming ${manifest.tag}...`);
     try {
       const result = await confirmPublish(hubUrl, token!, publishData.versionId);
@@ -245,20 +227,16 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
     }
   }
 
-  // Step 9: Summary
-  log.info("");
+  // Step 7: Summary
   if (published.length > 0) {
-    log.success(`Published ${published.length} widget(s):`);
+    log.success(`Published ${published.length} widget(s)`);
     for (const w of published) {
-      log.info(`  ${w.name} -> ${w.cdnUrl}`);
+      log.info(`  ${w.name} → ${w.cdnUrl}`);
     }
   }
 
   if (skipped.length > 0) {
-    log.warn(`Skipped ${skipped.length} widget(s):`);
-    for (const w of skipped) {
-      log.info(`  ${w.name}: ${w.reason}`);
-    }
+    log.warn(`Skipped ${skipped.length}: ${skipped.map((w) => w.name).join(", ")}`);
   }
 
   if (published.length === 0 && skipped.length === 0) {

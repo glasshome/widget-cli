@@ -86,7 +86,12 @@ function validateManifest(manifest: WidgetManifest): ValidationResult {
   };
 }
 
-export async function runValidate(cwd: string, widgetName?: string): Promise<boolean> {
+export async function runValidate(
+  cwd: string,
+  widgetName?: string,
+  options?: { quiet?: boolean },
+): Promise<boolean> {
+  const quiet = options?.quiet ?? false;
   const widgets = discoverWidgets(cwd);
 
   if (widgets.length === 0) {
@@ -117,15 +122,18 @@ export async function runValidate(cwd: string, widgetName?: string): Promise<boo
 
   let allPassed = true;
 
+  const failed: string[] = [];
+
   for (const name of toValidate) {
-    log.info(`\nValidating widget: ${name}`);
+    if (!quiet) log.info(`\nValidating widget: ${name}`);
 
     // Read and validate manifest.json
     let manifest: WidgetManifest;
     try {
       manifest = readManifest(cwd, name);
     } catch (err) {
-      log.error(`  Failed to read manifest: ${err instanceof Error ? err.message : String(err)}`);
+      if (!quiet) log.error(`  Failed to read manifest: ${err instanceof Error ? err.message : String(err)}`);
+      failed.push(name);
       allPassed = false;
       continue;
     }
@@ -134,11 +142,11 @@ export async function runValidate(cwd: string, widgetName?: string): Promise<boo
 
     if (result.errors.length > 0) {
       for (const err of result.errors) {
-        log.error(`  - ${err}`);
+        if (!quiet) log.error(`  - ${err}`);
       }
     }
 
-    if (result.warnings.length > 0) {
+    if (!quiet && result.warnings.length > 0) {
       for (const warn of result.warnings) {
         log.warn(`  - ${warn}`);
       }
@@ -147,9 +155,10 @@ export async function runValidate(cwd: string, widgetName?: string): Promise<boo
     // Check bundle exists
     const bundlePath = resolve(cwd, "dist", `${name}.js`);
     if (!existsSync(bundlePath)) {
-      log.error(`  - dist/${name}.js not found`);
+      if (!quiet) log.error(`  - dist/${name}.js not found`);
       allPassed = false;
-    } else {
+      failed.push(name);
+    } else if (!quiet) {
       try {
         const info = getWidgetBundleInfo(cwd, name);
         log.info(`  Bundle: ${formatBytes(info.raw)} (${formatBytes(info.gzip)} gzipped)`);
@@ -159,9 +168,10 @@ export async function runValidate(cwd: string, widgetName?: string): Promise<boo
     }
 
     if (result.passed) {
-      log.success(`  ${name}: passed`);
+      if (!quiet) log.success(`  ${name}: passed`);
     } else {
-      log.error(`  ${name}: failed`);
+      if (!quiet) log.error(`  ${name}: failed`);
+      failed.push(name);
       allPassed = false;
     }
   }
@@ -169,23 +179,31 @@ export async function runValidate(cwd: string, widgetName?: string): Promise<boo
   // Validate registry.json
   const registry = readRegistry(cwd);
   if (!registry) {
-    log.error("\ndist/registry.json not found");
+    if (!quiet) log.error("\ndist/registry.json not found");
     allPassed = false;
   } else {
     const registryTags = new Set(registry.widgets.map((w) => w.bundleUrl));
     for (const name of toValidate) {
       if (!registryTags.has(`./${name}.js`)) {
-        log.error(`  Widget "${name}" not listed in registry.json`);
+        if (!quiet) log.error(`  Widget "${name}" not listed in registry.json`);
         allPassed = false;
       }
     }
-    log.info(`\nRegistry: ${registry.widgets.length} widget(s)`);
+    if (!quiet) log.info(`\nRegistry: ${registry.widgets.length} widget(s)`);
   }
 
-  if (allPassed) {
-    log.success("\nAll checks passed");
+  if (quiet) {
+    if (allPassed) {
+      log.success(`Validated ${toValidate.length} widget(s)`);
+    } else {
+      log.error(`Validation failed for: ${failed.join(", ")}`);
+    }
   } else {
-    log.error("\nValidation failed");
+    if (allPassed) {
+      log.success("\nAll checks passed");
+    } else {
+      log.error("\nValidation failed");
+    }
   }
 
   return allPassed;
