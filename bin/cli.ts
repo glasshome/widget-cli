@@ -26,7 +26,7 @@ Commands:
   build                  Build all widgets (per-widget, self-contained bundles)
   connect <url>          Connect to a running dashboard for live testing
   validate [name]        Validate all widgets or a specific one
-  publish [hub-url]      Build all widgets and publish to Hub
+  publish [hub-url]      Build and publish a widget to Hub
   login [hub-url]        Authenticate with GlassHome Hub
   info [name]            Show widget metadata and bundle info
   upgrade                Upgrade @glasshome/widget-sdk to latest version

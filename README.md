@@ -27,12 +27,24 @@ bunx @glasshome/widget-cli create
 | `build` | Build all widgets |
 | `connect <url>` | Connect to a running dashboard for live testing |
 | `validate [name]` | Validate all widgets or a specific one |
-| `publish` | Build and publish to GlassHome Hub |
-| `login [hub-url]` | Authenticate with GlassHome Hub |
+| `publish [hub-url]` | Select and publish a widget to GlassHome Hub |
+| `login [hub-url]` | Authenticate with GlassHome Hub (required before publish) |
 | `info [name]` | Show widget metadata and bundle info |
 | `upgrade` | Upgrade @glasshome/widget-sdk to latest version |
 
 Running `glasshome-widget` with no command inside a widget project shows help. Outside a widget project, it starts the create wizard.
+
+## Publishing
+
+```bash
+# Login first (one-time)
+glasshome-widget login
+
+# Then publish
+glasshome-widget publish
+```
+
+The CLI prompts you to select a widget, choose a version bump, then builds and publishes. Each widget tracks its own version in its `manifest.json`.
 
 ## Documentation
 

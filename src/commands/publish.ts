@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { cancel, isCancel, log, multiselect, select, spinner } from "@clack/prompts";
+import { cancel, isCancel, log, select, spinner } from "@clack/prompts";
 import semver from "semver";
 import { getHubUrl, getToken } from "../utils/auth";
 import { confirmPublish, fetchScopes, requestPublish, uploadToR2 } from "../utils/hub-api";
@@ -17,7 +17,7 @@ import { runLogin } from "./login";
 export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<void> {
   const s = spinner();
 
-  // Step 1: Validate (quiet — only show summary)
+  // Step 1: Validate (quiet)
   const { runValidate } = await import("./validate");
   const valid = await runValidate(cwd, undefined, { quiet: true });
   if (!valid) {
@@ -25,13 +25,13 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
     process.exit(1);
   }
 
-  // Step 2: Authenticate with Hub
+  // Step 2: Authenticate
   const hubUrl = hubUrlOverride ?? getHubUrl();
-  log.info(`Hub: ${hubUrl}`);
+  if (hubUrlOverride) log.info(`Hub: ${hubUrl}`);
   let token = await getToken(hubUrl);
 
   if (!token) {
-    log.warn("Not authenticated with Hub. Starting login...");
+    log.warn("Not authenticated. Starting login...");
     try {
       await runLogin(hubUrl);
     } catch (err) {
@@ -45,7 +45,7 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
     }
   }
 
-  // Fetch available scopes from hub
+  // Step 3: Select scope
   const scopes = await fetchScopes(hubUrl, token!);
   if (scopes.length === 0) {
     log.error("No publishing scopes available. Ensure your account is properly set up.");
@@ -74,7 +74,7 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
     scope = choice as string;
   }
 
-  // Step 3: Select widgets to publish
+  // Step 4: Select widget
   const widgets = discoverWidgets(cwd);
   const widgetOptions = widgets.map((name) => {
     const manifest = readManifest(cwd, name);
@@ -89,10 +89,9 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
     };
   });
 
-  const selected = await multiselect({
-    message: "Select widgets to publish:",
+  const selected = await select({
+    message: "Select widget to publish:",
     options: widgetOptions,
-    initialValues: widgets,
   });
 
   if (isCancel(selected)) {
@@ -100,33 +99,19 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
     process.exit(0);
   }
 
-  const selectedWidgets = selected as string[];
-  if (selectedWidgets.length === 0) {
-    log.warn("No widgets selected.");
-    return;
-  }
+  const widgetName = selected as string;
+  const manifest = readManifest(cwd, widgetName);
 
-  // Step 4: Version bump (applied only to selected widgets)
-  const pkgPath = resolve(cwd, "package.json");
-  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-  const currentVersion = pkg.version ?? "0.0.0";
+  // Step 5: Version bump (per-widget, from manifest)
+  const currentVersion = manifest.version ?? "0.0.0";
 
   const bump = await select({
-    message: `Current version: ${currentVersion}. Bump version?`,
+    message: `${manifest.tag} version: ${currentVersion}. Bump?`,
     options: [
       { value: "keep", label: `Keep ${currentVersion}`, hint: "fails if already published" },
-      {
-        value: "patch",
-        label: `Patch (${semver.inc(currentVersion, "patch")})`,
-      },
-      {
-        value: "minor",
-        label: `Minor (${semver.inc(currentVersion, "minor")})`,
-      },
-      {
-        value: "major",
-        label: `Major (${semver.inc(currentVersion, "major")})`,
-      },
+      { value: "patch", label: `Patch (${semver.inc(currentVersion, "patch")})` },
+      { value: "minor", label: `Minor (${semver.inc(currentVersion, "minor")})` },
+      { value: "major", label: `Major (${semver.inc(currentVersion, "major")})` },
     ],
   });
 
@@ -138,108 +123,76 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
   let version = currentVersion;
   if (bump !== "keep") {
     version = semver.inc(currentVersion, bump as "patch" | "minor" | "major") ?? currentVersion;
-
-    pkg.version = version;
-    writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
-
-    for (const name of selectedWidgets) {
-      const manifest = readManifest(cwd, name);
-      manifest.version = version;
-      writeManifest(cwd, name, manifest);
-    }
-
-    log.info(`Version bumped to ${version}`);
+    manifest.version = version;
+    writeManifest(cwd, widgetName, manifest);
   }
 
-  // Step 5: Rebuild
-  s.start("Building widgets...");
-  const buildProc = Bun.spawnSync(["bun", "run", "build"], { cwd });
-  if (buildProc.exitCode !== 0) {
+  // Step 6: Build (async so spinner animates)
+  s.start("Building widget...");
+  const buildProc = Bun.spawn(["bun", "run", "build"], { cwd, stdout: "pipe", stderr: "pipe" });
+  const buildExit = await buildProc.exited;
+  if (buildExit !== 0) {
+    const stderr = await new Response(buildProc.stderr).text();
     s.stop("Build failed");
-    log.error(buildProc.stderr.toString());
+    log.error(stderr);
     process.exit(1);
   }
   s.stop("Build complete");
 
-  // Step 6: Publish each selected widget
-  const published: Array<{ name: string; cdnUrl: string }> = [];
-  const skipped: Array<{ name: string; reason: string }> = [];
+  // Step 7: Publish
+  const distPath = resolve(cwd, "dist", `${widgetName}.js`);
 
-  for (const widgetName of selectedWidgets) {
-    const manifest = readManifest(cwd, widgetName);
-    const distPath = resolve(cwd, "dist", `${widgetName}.js`);
-
-    let bundleBuffer: Buffer;
-    try {
-      bundleBuffer = Buffer.from(readFileSync(distPath));
-    } catch {
-      log.error(`Bundle not found: dist/${widgetName}.js`);
-      continue;
-    }
-
-    const sha256Hash = createHash("sha256").update(bundleBuffer).digest("hex");
-
-    s.start(`Publishing ${manifest.tag}@${version}...`);
-
-    let publishData: Awaited<ReturnType<typeof requestPublish>>;
-    try {
-      publishData = await requestPublish(hubUrl, token!, {
-        scope,
-        name: widgetName,
-        displayName: manifest.name,
-        description: manifest.description,
-        minSize: manifest.minSize,
-        maxSize: manifest.maxSize,
-        sdkVersion: manifest.sdkVersion,
-        version,
-        bundleSize: bundleBuffer.byteLength,
-        sha256Hash,
-        manifestJson: JSON.stringify(manifest),
-      });
-    } catch (err: any) {
-      if (err.status === 409) {
-        s.stop(`Skipped ${manifest.tag}@${version}`);
-        skipped.push({ name: manifest.tag, reason: "already published" });
-        continue;
-      }
-      s.stop(`Failed ${manifest.tag}`);
-      log.error(`${manifest.tag}: ${err.message}`);
-      continue;
-    }
-
-    s.message(`Uploading ${manifest.tag}...`);
-    try {
-      await uploadToR2(publishData.uploadUrl, bundleBuffer);
-    } catch (err: any) {
-      s.stop(`Upload failed for ${manifest.tag}`);
-      log.error(`${manifest.tag}: ${err.message}`);
-      continue;
-    }
-
-    s.message(`Confirming ${manifest.tag}...`);
-    try {
-      const result = await confirmPublish(hubUrl, token!, publishData.versionId);
-      s.stop(`Published ${manifest.tag}@${version}`);
-      published.push({ name: manifest.tag, cdnUrl: result.bundleUrl });
-    } catch (err: any) {
-      s.stop(`Confirm failed for ${manifest.tag}`);
-      log.error(`${manifest.tag}: ${err.message}`);
-    }
+  let bundleBuffer: Buffer;
+  try {
+    bundleBuffer = Buffer.from(readFileSync(distPath));
+  } catch {
+    log.error(`Bundle not found: dist/${widgetName}.js`);
+    process.exit(1);
   }
 
-  // Step 7: Summary
-  if (published.length > 0) {
-    log.success(`Published ${published.length} widget(s)`);
-    for (const w of published) {
-      log.info(`  ${w.name} → ${w.cdnUrl}`);
+  const sha256Hash = createHash("sha256").update(bundleBuffer).digest("hex");
+
+  s.start(`Publishing ${manifest.tag}@${version}...`);
+
+  let publishData: Awaited<ReturnType<typeof requestPublish>>;
+  try {
+    publishData = await requestPublish(hubUrl, token!, {
+      scope,
+      name: widgetName,
+      displayName: manifest.name,
+      description: manifest.description,
+      minSize: manifest.minSize,
+      maxSize: manifest.maxSize,
+      sdkVersion: manifest.sdkVersion,
+      version,
+      bundleSize: bundleBuffer.byteLength,
+      sha256Hash,
+      manifestJson: JSON.stringify(manifest),
+    });
+  } catch (err: any) {
+    if (err.status === 409) {
+      s.stop(`${manifest.tag}@${version} already published — bump version to republish`);
+      process.exit(0);
     }
+    s.stop(`Publish failed: ${err.message}`);
+    process.exit(1);
   }
 
-  if (skipped.length > 0) {
-    log.warn(`Skipped ${skipped.length}: ${skipped.map((w) => w.name).join(", ")}`);
+  s.message(`Uploading ${manifest.tag} to CDN...`);
+  try {
+    await uploadToR2(publishData.uploadUrl, bundleBuffer);
+  } catch (err: any) {
+    s.stop(`Upload failed: ${err.message}`);
+    process.exit(1);
   }
 
-  if (published.length === 0 && skipped.length === 0) {
-    log.error("No widgets were published.");
+  s.message(`Confirming ${manifest.tag}...`);
+  try {
+    const result = await confirmPublish(hubUrl, token!, publishData.versionId);
+    s.stop(`Published ${manifest.tag}@${version}`);
+    log.info(`CDN: ${result.bundleUrl}`);
+  } catch (err: any) {
+    s.stop(`Confirmation failed: ${err.message}`);
+    process.exit(1);
   }
 }

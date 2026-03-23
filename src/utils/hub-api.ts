@@ -62,8 +62,15 @@ export async function requestPublish(
   }
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Publish request failed (${res.status}): ${text}`);
+    let detail: string;
+    try {
+      const body = await res.text();
+      const json = JSON.parse(body);
+      detail = json.error || json.message || body;
+    } catch {
+      detail = `HTTP ${res.status} ${res.statusText}`;
+    }
+    throw Object.assign(new Error(detail), { status: res.status });
   }
 
   return res.json() as Promise<PublishRequestResponse>;
@@ -84,8 +91,15 @@ export async function confirmPublish(
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Publish confirm failed (${res.status}): ${text}`);
+    let detail: string;
+    try {
+      const body = await res.text();
+      const json = JSON.parse(body);
+      detail = json.error || json.message || body;
+    } catch {
+      detail = `HTTP ${res.status} ${res.statusText}`;
+    }
+    throw Object.assign(new Error(detail), { status: res.status });
   }
 
   return res.json() as Promise<PublishConfirmResponse>;

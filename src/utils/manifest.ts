@@ -27,49 +27,6 @@ export interface BundleInfo {
   text: string;
 }
 
-// ---------------------------------------------------------------------------
-// Legacy single-widget helpers (kept for backward compat)
-// ---------------------------------------------------------------------------
-
-/**
- * Extract the widget manifest from the built dist/index.js bundle
- * by dynamic-importing it and reading the registered custom element's metadata.
- */
-export async function extractManifest(cwd: string): Promise<WidgetManifest> {
-  const distPath = resolve(cwd, "dist/index.js");
-  if (!existsSync(distPath)) {
-    throw new Error(
-      "dist/index.js not found. Run `bun run build` first or let the command build for you.",
-    );
-  }
-
-  // Dynamic import the bundle — it self-registers a custom element via @glasshome/widget-sdk's defineWidget.
-  // The SDK's defineWidget stores manifest on the custom element class.
-  const mod = await import(distPath);
-
-  // The module default export or the manifest property contains widget metadata
-  const manifest: WidgetManifest | undefined = mod.manifest ?? mod.default?.manifest;
-
-  if (!manifest) {
-    throw new Error(
-      "Could not extract manifest from dist/index.js. Ensure your widget uses defineWidget() from @glasshome/widget-sdk.",
-    );
-  }
-
-  return manifest;
-}
-
-/**
- * Read the raw bundle text and compute sizes.
- */
-export function getBundleInfo(cwd: string): BundleInfo {
-  const distPath = resolve(cwd, "dist/index.js");
-  const text = readFileSync(distPath, "utf-8");
-  const raw = Buffer.byteLength(text, "utf-8");
-  const gzip = gzipSync(text).byteLength;
-  return { raw, gzip, text };
-}
-
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

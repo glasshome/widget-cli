@@ -88,9 +88,12 @@ export function clearToken(): void {
 
 export function getHubUrl(): string {
   const stored = getStoredAuth()?.hubUrl;
-  // Ignore localhost URLs from local dev sessions
-  if (stored && !stored.includes("localhost") && !stored.includes("127.0.0.1")) {
-    return stored;
+  if (stored) {
+    if (stored.includes("localhost") || stored.includes("127.0.0.1")) {
+      clearToken();
+    } else {
+      return stored;
+    }
   }
   return "https://glasshome.app";
 }

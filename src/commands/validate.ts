@@ -111,10 +111,12 @@ export async function runValidate(
   if (!existsSync(distDir)) {
     const s = spinner();
     s.start("Building widgets (dist/ not found)...");
-    const proc = Bun.spawnSync(["bun", "run", "build"], { cwd });
-    if (proc.exitCode !== 0) {
+    const proc = Bun.spawn(["bun", "run", "build"], { cwd, stdout: "pipe", stderr: "pipe" });
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) {
+      const stderr = await new Response(proc.stderr).text();
       s.stop("Build failed");
-      log.error(proc.stderr.toString());
+      log.error(stderr);
       return false;
     }
     s.stop("Build complete");
