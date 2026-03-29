@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { log, spinner } from "@clack/prompts";
-import { WidgetManifestSchema } from "@glasshome/widget-sdk/schemas";
 import {
   discoverWidgets,
   formatBytes,
@@ -23,13 +22,25 @@ function validateManifest(manifest: WidgetManifest): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // Validate core manifest shape using the shared schema
-  const result = WidgetManifestSchema.safeParse(manifest);
-  if (!result.success) {
-    for (const issue of result.error.issues) {
-      const path = issue.path.length > 0 ? issue.path.join(".") : "manifest";
-      errors.push(`${path}: ${issue.message}`);
-    }
+  // Required fields
+  if (!manifest.tag) errors.push("Missing required field: tag");
+  if (!manifest.name) errors.push("Missing required field: name");
+  if (!manifest.sdkVersion) errors.push("Missing required field: sdkVersion");
+
+  // Size validation
+  if (
+    !manifest.minSize ||
+    typeof manifest.minSize.w !== "number" ||
+    typeof manifest.minSize.h !== "number"
+  ) {
+    errors.push("minSize must be an object with numeric w and h properties");
+  }
+  if (
+    !manifest.maxSize ||
+    typeof manifest.maxSize.w !== "number" ||
+    typeof manifest.maxSize.h !== "number"
+  ) {
+    errors.push("maxSize must be an object with numeric w and h properties");
   }
 
   // Tag format (stricter than schema — enforces kebab-case with at least one hyphen)
