@@ -161,6 +161,7 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
       name: widgetName,
       displayName: manifest.name,
       description: manifest.description,
+      icon: manifest.icon,
       minSize: manifest.minSize,
       maxSize: manifest.maxSize,
       sdkVersion: manifest.sdkVersion,

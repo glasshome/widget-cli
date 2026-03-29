@@ -15,14 +15,16 @@ export async function fetchScopes(hubUrl: string, token: string): Promise<Publis
   return data.scopes;
 }
 
+import type { GridSize } from "@glasshome/widget-sdk";
+
 interface PublishRequestParams {
   scope: string;
   name: string;
   displayName: string;
   description?: string;
   icon?: string;
-  minSize: { w: number; h: number };
-  maxSize: { w: number; h: number };
+  minSize: GridSize;
+  maxSize: GridSize;
   sdkVersion: string;
   version: string;
   bundleSize: number;

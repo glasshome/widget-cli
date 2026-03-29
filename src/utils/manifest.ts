@@ -1,18 +1,9 @@
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
+import type { WidgetManifest as SdkWidgetManifest } from "@glasshome/widget-sdk";
 
-export interface WidgetManifest {
-  tag: string;
-  name: string;
-  minSize: { w: number; h: number };
-  maxSize: { w: number; h: number };
-  sdkVersion: string;
-  version?: string;
-  description?: string;
-  schema?: Record<string, unknown>;
-  defaultConfig?: Record<string, unknown>;
-}
+export type WidgetManifest = SdkWidgetManifest & { version?: string };
 
 export interface Registry {
   version: number;
