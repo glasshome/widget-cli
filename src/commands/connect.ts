@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { log, spinner } from "@clack/prompts";
 import { buildWidgets } from "@glasshome/widget-sdk/vite";
 import { trpcMutate, trpcQuery } from "../utils/api";
+import { extractHost, getHostToken, storeHostToken } from "../utils/auth";
 
 interface RegistryWidget {
   tag: string;
@@ -25,6 +26,7 @@ async function uploadAndRegister(
   apiUrl: string,
   distDir: string,
   widget: RegistryWidget,
+  token: string,
 ): Promise<void> {
   const api = apiUrl.replace(/\/$/, "");
 
@@ -42,7 +44,10 @@ async function uploadAndRegister(
   // Upload bundle to API
   const uploadRes = await fetch(`${api}/bundles/${widget.tag}`, {
     method: "POST",
-    headers: { "Content-Type": "application/javascript" },
+    headers: {
+      "Content-Type": "application/javascript",
+      Authorization: `Bearer ${token}`,
+    },
     body: bundleContent,
   });
 
@@ -57,6 +62,7 @@ async function uploadAndRegister(
   await trpcMutate({
     apiUrl: api,
     path: "widget.register",
+    token,
     input: {
       tag: widget.tag,
       name: widget.name,
@@ -71,13 +77,13 @@ async function uploadAndRegister(
  * Read registry.json and upload all widget bundles.
  * @returns Array of widget tags that were registered
  */
-async function uploadAllWidgets(apiUrl: string, distDir: string): Promise<string[]> {
+async function uploadAllWidgets(apiUrl: string, distDir: string, token: string): Promise<string[]> {
   const registryPath = resolve(distDir, "registry.json");
   const registry: RegistryJson = JSON.parse(readFileSync(registryPath, "utf-8"));
   const tags: string[] = [];
 
   for (const widget of registry.widgets) {
-    await uploadAndRegister(apiUrl, distDir, widget);
+    await uploadAndRegister(apiUrl, distDir, widget, token);
     tags.push(widget.tag);
   }
 
@@ -111,18 +117,144 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
     process.exit(1);
   }
 
-  // Step 3: Enable dev mode if needed
+  // Step 3: Obtain bearer token via device authorization flow
+  const api = apiUrl.replace(/\/$/, "");
+  const host = extractHost(api);
+  let token = "";
+
+  const existingToken = getHostToken(host);
+  if (existingToken) {
+    token = existingToken;
+    log.info("Using stored credentials for dashboard.");
+  } else {
+    // Request a device code
+    s.start("Requesting authorization code...");
+    let deviceCode: string;
+    let userCode: string;
+    let verificationUriComplete: string;
+    let expiresIn: number;
+    let interval: number;
+
+    try {
+      const res = await fetch(`${api}/api/auth/device/code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: "glasshome-widget-cli" }),
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as {
+        device_code: string;
+        user_code: string;
+        verification_uri_complete: string;
+        expires_in: number;
+        interval: number;
+      };
+      deviceCode = data.device_code;
+      userCode = data.user_code;
+      verificationUriComplete = data.verification_uri_complete;
+      expiresIn = data.expires_in;
+      interval = data.interval ?? 5;
+    } catch (err) {
+      s.stop("Failed to request device code");
+      log.error(
+        `Could not reach dashboard at ${api}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exit(1);
+    }
+    s.stop("Authorization code ready");
+
+    // Prompt user to visit the verification URL
+    log.info(`Open in browser: ${verificationUriComplete}`);
+    log.info(`Device code: ${userCode}`);
+
+    // Try to open browser automatically
+    await import("open")
+      .then((m) => m.default(verificationUriComplete))
+      .catch(() => {});
+
+    // Poll for approval
+    s.start("Waiting for authorization (approve in your browser)...");
+    const deadline = Date.now() + expiresIn * 1000;
+    let approved = false;
+
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, interval * 1000));
+
+      try {
+        const res = await fetch(`${api}/api/auth/device/token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+            device_code: deviceCode,
+            client_id: "glasshome-widget-cli",
+          }),
+        });
+
+        if (res.ok) {
+          const data = (await res.json()) as {
+            access_token: string;
+            expires_in: number;
+          };
+          token = data.access_token;
+          const tokenExpiresAt = Date.now() + data.expires_in * 1000;
+          storeHostToken(host, token, tokenExpiresAt);
+          approved = true;
+          break;
+        }
+
+        const errData = (await res.json()) as { error?: string };
+        if (errData.error === "authorization_pending" || errData.error === "slow_down") {
+          // Continue polling
+          if (errData.error === "slow_down") {
+            interval = Math.min(interval + 5, 30);
+          }
+          continue;
+        }
+        if (errData.error === "access_denied") {
+          s.stop("Authorization denied");
+          log.error("You denied access. Run `bun widget connect` again to retry.");
+          process.exit(1);
+        }
+        if (errData.error === "expired_token") {
+          s.stop("Device code expired");
+          log.error("The device code expired before you approved. Run `bun widget connect` again.");
+          process.exit(1);
+        }
+        // Unexpected error
+        throw new Error(errData.error ?? `HTTP ${res.status}`);
+      } catch (err) {
+        s.stop("Authorization failed");
+        log.error(
+          `Error polling for token: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        process.exit(1);
+      }
+    }
+
+    if (!approved) {
+      s.stop("Timed out");
+      log.error("Authorization timed out. Run `bun widget connect` again.");
+      process.exit(1);
+    }
+    s.stop("Authorized");
+  }
+
+  // Step 4: Enable dev mode if needed
   s.start("Registering widgets with dashboard...");
   try {
     const configData = await trpcQuery<{ devMode: boolean }>({
-      apiUrl: apiUrl.replace(/\/$/, ""),
+      apiUrl: api,
       path: "appConfig.get",
     });
 
     if (!configData.devMode) {
       await trpcMutate({
-        apiUrl: apiUrl.replace(/\/$/, ""),
+        apiUrl: api,
         path: "appConfig.toggleDevMode",
+        token,
         input: {},
       });
     }
@@ -130,11 +262,11 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
     // Non-fatal — dev mode may already be enabled
   }
 
-  // Step 4: Upload bundles and register widgets
-  const registeredTags = await uploadAllWidgets(apiUrl, distDir);
+  // Step 5: Upload bundles and register widgets
+  const registeredTags = await uploadAllWidgets(apiUrl, distDir, token);
   s.stop("Widgets registered");
 
-  // Step 5: Watch src/ for changes and rebuild + re-upload only the changed widget
+  // Step 6: Watch src/ for changes and rebuild + re-upload only the changed widget
   const srcDir = resolve(cwd, "src");
   let rebuilding = false;
   const watcher = watch(srcDir, { recursive: true }, async (_event, filename) => {
@@ -153,7 +285,7 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
       const registry: RegistryJson = JSON.parse(readFileSync(registryPath, "utf-8"));
       const widget = registry.widgets.find((w) => w.bundleUrl === `./${widgetName}.js`);
       if (widget) {
-        await uploadAndRegister(apiUrl, distDir, widget);
+        await uploadAndRegister(apiUrl, distDir, widget, token);
         log.info(`Rebuilt & uploaded ${widget.tag}`);
       } else {
         log.warn(`No registry entry for ${widgetName} — skipping upload`);
@@ -179,7 +311,7 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
   log.info("File changes auto-rebuild and re-upload. Add widgets with `bun widget add`.");
   log.info("Press Ctrl+C to disconnect.");
 
-  // Step 6: Handle SIGINT — unregister and clean up
+  // Step 7: Handle SIGINT — unregister and clean up
   const cleanup = async () => {
     log.info("\nDisconnecting...");
     watcher.close();
@@ -187,8 +319,9 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
     for (const tag of registeredTags) {
       try {
         await trpcMutate({
-          apiUrl: apiUrl.replace(/\/$/, ""),
+          apiUrl: api,
           path: "widget.unregister",
+          token,
           input: { tag },
         });
       } catch {

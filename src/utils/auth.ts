@@ -1,14 +1,27 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-interface StoredAuth {
+interface HubAuth {
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
   hubUrl: string;
   scope: string;
 }
+
+interface HostAuth {
+  token: string;
+  expiresAt: number;
+}
+
+interface StoredAuthFile {
+  hub?: HubAuth;
+  hosts: Record<string, HostAuth>;
+}
+
+// Legacy shape written by older CLI versions (hub auth only, no hosts key)
+type LegacyStoredAuth = HubAuth;
 
 const AUTH_DIR = join(homedir(), ".glasshome");
 const AUTH_FILE = join(AUTH_DIR, "auth.json");
@@ -19,31 +32,78 @@ function ensureDir(): void {
   }
 }
 
-export function storeToken(data: StoredAuth): void {
+function readAuthFile(): StoredAuthFile {
+  if (!existsSync(AUTH_FILE)) return { hosts: {} };
+  try {
+    const raw = JSON.parse(readFileSync(AUTH_FILE, "utf-8")) as
+      | StoredAuthFile
+      | LegacyStoredAuth;
+    // Migrate legacy format (hub-only, no hosts key)
+    if ("accessToken" in raw) {
+      return { hub: raw as HubAuth, hosts: {} };
+    }
+    const typed = raw as StoredAuthFile;
+    return { hub: typed.hub, hosts: typed.hosts ?? {} };
+  } catch {
+    return { hosts: {} };
+  }
+}
+
+function writeAuthFile(data: StoredAuthFile): void {
   ensureDir();
   writeFileSync(AUTH_FILE, JSON.stringify(data, null, 2), { mode: 0o600 });
 }
 
-export function getStoredAuth(): StoredAuth | null {
-  if (!existsSync(AUTH_FILE)) return null;
-  try {
-    return JSON.parse(readFileSync(AUTH_FILE, "utf-8"));
-  } catch {
-    return null;
-  }
+// --- Host-keyed token storage (for device auth / widget connect) ---
+
+export function storeHostToken(host: string, token: string, expiresAt: number): void {
+  const data = readAuthFile();
+  data.hosts[host] = { token, expiresAt };
+  writeAuthFile(data);
+}
+
+export function getHostToken(host: string): string | null {
+  const data = readAuthFile();
+  const entry = data.hosts[host];
+  if (!entry) return null;
+  // Return null if expired (60s buffer)
+  if (Date.now() >= entry.expiresAt - 60_000) return null;
+  return entry.token;
+}
+
+export function clearHostToken(host: string): void {
+  const data = readAuthFile();
+  delete data.hosts[host];
+  writeAuthFile(data);
+}
+
+// --- Hub auth storage (for widget publishing) ---
+
+export function storeToken(hubData: HubAuth): void {
+  const data = readAuthFile();
+  data.hub = hubData;
+  writeAuthFile(data);
+}
+
+export function getStoredAuth(): HubAuth | null {
+  return readAuthFile().hub ?? null;
 }
 
 export async function getToken(hubUrl: string): Promise<string | null> {
+  // Check host-keyed token first (for connect flow)
+  const host = extractHost(hubUrl);
+  const hostToken = getHostToken(host);
+  if (hostToken) return hostToken;
+
+  // Fall back to hub auth (for publishing)
   const stored = getStoredAuth();
   if (!stored) return null;
   if (stored.hubUrl !== hubUrl) return null;
 
-  // Check if token is still valid (with 60s buffer)
   if (Date.now() < stored.expiresAt - 60_000) {
     return stored.accessToken;
   }
 
-  // Try to refresh
   if (!stored.refreshToken) return null;
 
   try {
@@ -60,39 +120,39 @@ export async function getToken(hubUrl: string): Promise<string | null> {
 
     if (!res.ok) return null;
 
-    const data = (await res.json()) as {
+    const tokenData = (await res.json()) as {
       access_token: string;
       refresh_token?: string;
       expires_in: number;
     };
 
     storeToken({
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token ?? stored.refreshToken,
-      expiresAt: Date.now() + data.expires_in * 1000,
+      accessToken: tokenData.access_token,
+      refreshToken: tokenData.refresh_token ?? stored.refreshToken,
+      expiresAt: Date.now() + tokenData.expires_in * 1000,
       hubUrl: stored.hubUrl,
       scope: stored.scope,
     });
 
-    return data.access_token;
+    return tokenData.access_token;
   } catch {
     return null;
   }
 }
 
 export function clearToken(): void {
-  if (existsSync(AUTH_FILE)) {
-    unlinkSync(AUTH_FILE);
-  }
+  const data = readAuthFile();
+  delete data.hub;
+  writeAuthFile(data);
 }
 
 export function getHubUrl(): string {
-  const stored = getStoredAuth()?.hubUrl;
+  const stored = getStoredAuth();
   if (stored) {
-    if (stored.includes("localhost") || stored.includes("127.0.0.1")) {
+    if (stored.hubUrl.includes("localhost") || stored.hubUrl.includes("127.0.0.1")) {
       clearToken();
     } else {
-      return stored;
+      return stored.hubUrl;
     }
   }
   return "https://glasshome.app";
@@ -100,4 +160,15 @@ export function getHubUrl(): string {
 
 export function getScope(): string | null {
   return getStoredAuth()?.scope ?? null;
+}
+
+// --- Helpers ---
+
+export function extractHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    // Bare host:port or path-less string
+    return url.replace(/^https?:\/\//, "").split("/")[0] ?? url;
+  }
 }
