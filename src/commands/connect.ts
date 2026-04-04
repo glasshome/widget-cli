@@ -122,11 +122,25 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
   const host = extractHost(api);
   let token = "";
 
+  // Validate stored token before using it
   const existingToken = getHostToken(host);
   if (existingToken) {
-    token = existingToken;
-    log.info("Using stored credentials for dashboard.");
-  } else {
+    try {
+      const check = await fetch(`${api}/trpc/appConfig.get`, {
+        headers: { Authorization: `Bearer ${existingToken}` },
+      });
+      if (check.ok) {
+        token = existingToken;
+        log.info("Using stored credentials for dashboard.");
+      } else {
+        log.warn("Stored credentials expired — re-authenticating.");
+      }
+    } catch {
+      log.warn("Could not validate stored credentials — re-authenticating.");
+    }
+  }
+
+  if (!token) {
     // Request a device code
     s.start("Requesting authorization code...");
     let deviceCode: string;
@@ -242,6 +256,11 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
       process.exit(1);
     }
     s.stop("Authorized");
+  }
+
+  if (!token) {
+    log.error("Authentication failed. Run `bun widget connect` again.");
+    process.exit(1);
   }
 
   // Step 4: Enable dev mode if needed
