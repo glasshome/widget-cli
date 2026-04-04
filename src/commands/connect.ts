@@ -174,93 +174,89 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
       interval = data.interval ?? 5;
     } catch (err) {
       s.stop("Failed to request device code");
-      log.error(
+      log.warn(
         `Could not reach dashboard at ${api}: ${err instanceof Error ? err.message : String(err)}`,
       );
-      process.exit(1);
+      // token stays empty — caught by guard below
     }
-    s.stop("Authorization code ready");
 
-    // Prompt user to visit the verification URL
-    log.info(`Open in browser: ${verificationUriComplete}`);
-    log.info(`Device code: ${userCode}`);
+    if (deviceCode!) {
+      s.stop("Authorization code ready");
 
-    // Try to open browser automatically
-    await import("open")
-      .then((m) => m.default(verificationUriComplete))
-      .catch(() => {});
+      // Prompt user to visit the verification URL
+      log.info(`Open in browser: ${verificationUriComplete!}`);
+      log.info(`Device code: ${userCode!}`);
 
-    // Poll for approval
-    s.start("Waiting for authorization (approve in your browser)...");
-    const deadline = Date.now() + expiresIn * 1000;
-    let approved = false;
+      // Try to open browser automatically
+      await import("open")
+        .then((m) => m.default(verificationUriComplete!))
+        .catch(() => {});
 
-    while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, interval * 1000));
+      // Poll for approval
+      s.start("Waiting for authorization (approve in your browser)...");
+      const deadline = Date.now() + expiresIn! * 1000;
 
-      try {
-        const res = await fetch(`${api}/api/auth/device/token`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-            device_code: deviceCode,
-            client_id: "glasshome-widget-cli",
-          }),
-        });
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, interval! * 1000));
 
-        if (res.ok) {
-          const data = (await res.json()) as {
-            access_token: string;
-            expires_in: number;
-          };
-          token = data.access_token;
-          const tokenExpiresAt = Date.now() + data.expires_in * 1000;
-          storeHostToken(host, token, tokenExpiresAt);
-          approved = true;
+        try {
+          const res = await fetch(`${api}/api/auth/device/token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+              device_code: deviceCode,
+              client_id: "glasshome-widget-cli",
+            }),
+          });
+
+          if (res.ok) {
+            const data = (await res.json()) as {
+              access_token: string;
+              expires_in: number;
+            };
+            token = data.access_token;
+            const tokenExpiresAt = Date.now() + data.expires_in * 1000;
+            storeHostToken(host, token, tokenExpiresAt);
+            break;
+          }
+
+          const errData = (await res.json()) as { error?: string };
+          if (errData.error === "authorization_pending" || errData.error === "slow_down") {
+            if (errData.error === "slow_down") {
+              interval = Math.min(interval! + 5, 30);
+            }
+            continue;
+          }
+          if (errData.error === "access_denied") {
+            s.stop("Authorization denied");
+            break;
+          }
+          if (errData.error === "expired_token") {
+            s.stop("Device code expired");
+            break;
+          }
+          // Unexpected error — stop polling
+          s.stop(`Auth error: ${errData.error ?? res.status}`);
+          break;
+        } catch (err) {
+          s.stop("Authorization failed");
+          log.warn(`Error polling for token: ${err instanceof Error ? err.message : String(err)}`);
           break;
         }
+      }
 
-        const errData = (await res.json()) as { error?: string };
-        if (errData.error === "authorization_pending" || errData.error === "slow_down") {
-          // Continue polling
-          if (errData.error === "slow_down") {
-            interval = Math.min(interval + 5, 30);
-          }
-          continue;
-        }
-        if (errData.error === "access_denied") {
-          s.stop("Authorization denied");
-          log.error("You denied access. Run `bun widget connect` again to retry.");
-          process.exit(1);
-        }
-        if (errData.error === "expired_token") {
-          s.stop("Device code expired");
-          log.error("The device code expired before you approved. Run `bun widget connect` again.");
-          process.exit(1);
-        }
-        // Unexpected error
-        throw new Error(errData.error ?? `HTTP ${res.status}`);
-      } catch (err) {
-        s.stop("Authorization failed");
-        log.error(
-          `Error polling for token: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        process.exit(1);
+      if (token) {
+        s.stop("Authorized");
+      } else {
+        s.stop("Not authorized");
       }
     }
-
-    if (!approved) {
-      s.stop("Timed out");
-      log.error("Authorization timed out. Run `bun widget connect` again.");
-      process.exit(1);
-    }
-    s.stop("Authorized");
   }
 
   if (!token) {
-    log.error("Authentication failed. Run `bun widget connect` again.");
-    process.exit(1);
+    log.warn("Authentication failed — widgets won't be connected. Log in at the dashboard first, then restart.");
+    return;
   }
 
   // Step 4: Enable dev mode if needed
