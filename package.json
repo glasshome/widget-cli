@@ -16,7 +16,9 @@
     "template"
   ],
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/semver": "^7.0.0",
+    "vite-plugin-solid": "^2.11.0"
   },
   "dependencies": {
     "@clack/prompts": "^0.10.0",
