@@ -107,11 +107,11 @@ export async function confirmPublish(
   return res.json() as Promise<PublishConfirmResponse>;
 }
 
-export async function uploadToR2(uploadUrl: string, bundleBuffer: Buffer): Promise<void> {
+export async function uploadToR2(uploadUrl: string, bundleBuffer: Uint8Array): Promise<void> {
   const res = await fetch(uploadUrl, {
     method: "PUT",
     headers: { "Content-Type": "application/javascript" },
-    body: bundleBuffer,
+    body: bundleBuffer as unknown as BodyInit,
   });
 
   if (!res.ok) {
