@@ -42,10 +42,12 @@ export async function runInfo(cwd: string, widgetName?: string): Promise<void> {
 
     try {
       const manifest = readManifest(cwd, name);
-      log.info(`  Tag:         ${manifest.tag}`);
       log.info(`  Name:        ${manifest.name}`);
       log.info(`  Min Size:    ${manifest.minSize.w}×${manifest.minSize.h}`);
       log.info(`  Max Size:    ${manifest.maxSize.w}×${manifest.maxSize.h}`);
+      if (manifest.defaultSize) {
+        log.info(`  Default:     ${manifest.defaultSize.w}×${manifest.defaultSize.h}`);
+      }
       log.info(`  SDK Version: ${manifest.sdkVersion}`);
       if (manifest.version) {
         log.info(`  Version:     ${manifest.version}`);

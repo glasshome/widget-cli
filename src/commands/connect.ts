@@ -41,8 +41,8 @@ async function uploadAndRegister(
 
   const bundleContent = readFileSync(bundlePath, "utf-8");
 
-  // Upload bundle to API
-  const uploadRes = await fetch(`${api}/bundles/${widget.tag}`, {
+  // Upload bundle to API (local registry namespace)
+  const uploadRes = await fetch(`${api}/bundles/local/${widget.tag}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/javascript",
@@ -67,7 +67,7 @@ async function uploadAndRegister(
       tag: widget.tag,
       name: widget.name,
       version: widget.version,
-      bundleUrl: `/bundles/${widget.tag}/bundle.js`,
+      bundleUrl: `/bundles/local/${widget.tag}/bundle.js`,
       manifestJson: JSON.stringify(manifest),
     },
   });
@@ -153,7 +153,9 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
       };
       deviceCode = data.device_code;
       userCode = data.user_code;
-      verificationUriComplete = data.verification_uri_complete;
+      // Build verification URL from the dashboard URL the user provided,
+      // not the API response (which uses the API server's origin)
+      verificationUriComplete = `${api}/device?user_code=${data.user_code}`;
       expiresIn = data.expires_in;
       interval = data.interval ?? 5;
     } catch (err) {

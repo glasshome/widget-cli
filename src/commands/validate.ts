@@ -10,8 +10,6 @@ import {
   type WidgetManifest,
 } from "../utils/manifest";
 
-const TAG_REGEX = /^[a-z][a-z0-9]*(-[a-z0-9]+)+$/;
-
 interface ValidationResult {
   passed: boolean;
   errors: string[];
@@ -21,33 +19,46 @@ interface ValidationResult {
 function validateManifest(manifest: WidgetManifest): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
+  const hasValidMinSize =
+    !!manifest.minSize &&
+    typeof manifest.minSize.w === "number" &&
+    typeof manifest.minSize.h === "number";
+  const hasValidMaxSize =
+    !!manifest.maxSize &&
+    typeof manifest.maxSize.w === "number" &&
+    typeof manifest.maxSize.h === "number";
 
   // Required fields
-  if (!manifest.tag) errors.push("Missing required field: tag");
   if (!manifest.name) errors.push("Missing required field: name");
   if (!manifest.sdkVersion) errors.push("Missing required field: sdkVersion");
 
   // Size validation
-  if (
-    !manifest.minSize ||
-    typeof manifest.minSize.w !== "number" ||
-    typeof manifest.minSize.h !== "number"
-  ) {
+  if (!hasValidMinSize) {
     errors.push("minSize must be an object with numeric w and h properties");
   }
-  if (
-    !manifest.maxSize ||
-    typeof manifest.maxSize.w !== "number" ||
-    typeof manifest.maxSize.h !== "number"
-  ) {
+  if (!hasValidMaxSize) {
     errors.push("maxSize must be an object with numeric w and h properties");
   }
-
-  // Tag format (stricter than schema — enforces kebab-case with at least one hyphen)
-  if (manifest.tag && !TAG_REGEX.test(manifest.tag)) {
-    errors.push(
-      `Invalid tag format "${manifest.tag}" — must match ${TAG_REGEX} (e.g. glasshome-my-widget)`,
-    );
+  if (
+    manifest.defaultSize &&
+    (typeof manifest.defaultSize.w !== "number" || typeof manifest.defaultSize.h !== "number")
+  ) {
+    errors.push("defaultSize must be an object with numeric w and h properties");
+  }
+  if (hasValidMinSize && hasValidMaxSize) {
+    if (manifest.minSize.w > manifest.maxSize.w || manifest.minSize.h > manifest.maxSize.h) {
+      errors.push("minSize must be less than or equal to maxSize");
+    }
+    if (manifest.defaultSize) {
+      if (
+        manifest.defaultSize.w < manifest.minSize.w ||
+        manifest.defaultSize.h < manifest.minSize.h ||
+        manifest.defaultSize.w > manifest.maxSize.w ||
+        manifest.defaultSize.h > manifest.maxSize.h
+      ) {
+        errors.push("defaultSize must be within minSize and maxSize bounds");
+      }
+    }
   }
 
   // Schema validation

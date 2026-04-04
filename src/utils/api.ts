@@ -7,6 +7,7 @@ interface TrpcMutationOptions {
   apiUrl: string;
   path: string;
   input: Record<string, unknown>;
+  token?: string;
 }
 
 interface TrpcResult<T = unknown> {
@@ -15,9 +16,11 @@ interface TrpcResult<T = unknown> {
 
 export async function trpcMutate<T = unknown>(opts: TrpcMutationOptions): Promise<T> {
   const url = `${opts.apiUrl.replace(/\/$/, "")}/trpc/${opts.path}`;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(opts.input),
   });
 
@@ -34,15 +37,18 @@ interface TrpcQueryOptions {
   apiUrl: string;
   path: string;
   input?: Record<string, unknown>;
+  token?: string;
 }
 
 export async function trpcQuery<T = unknown>(opts: TrpcQueryOptions): Promise<T> {
   const base = `${opts.apiUrl.replace(/\/$/, "")}/trpc/${opts.path}`;
   const url = opts.input ? `${base}?input=${encodeURIComponent(JSON.stringify(opts.input))}` : base;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
 
   const res = await fetch(url, {
     method: "GET",
-    headers: { "Content-Type": "application/json" },
+    headers,
   });
 
   if (!res.ok) {

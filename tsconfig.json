@@ -3,21 +3,10 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "customConditions": ["@glasshome/source"],
-    "verbatimModuleSyntax": true,
     "strict": true,
+    "noEmit": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "isolatedModules": true,
-    "noUncheckedIndexedAccess": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "lib": ["ESNext"]
+    "types": ["bun-types"]
   },
-  "include": ["bin", "src"],
-  "exclude": ["node_modules", "template"]
+  "include": ["src", "bin"]
 }

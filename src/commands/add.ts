@@ -45,6 +45,7 @@ export function scaffoldWidget(
     description: widgetDescription,
     minSize: { w: 1, h: 1 },
     maxSize: { w: 4, h: 4 },
+    defaultSize: { w: 2, h: 2 },
     sdkVersion: "^0.2.0",
     version: "0.1.0",
   };

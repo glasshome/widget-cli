@@ -85,7 +85,7 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
     } catch {}
     return {
       value: name,
-      label: `${manifest.tag}${sizeInfo}`,
+      label: `${manifest.name}${sizeInfo}`,
     };
   });
 
@@ -106,7 +106,7 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
   const currentVersion = manifest.version ?? "0.0.0";
 
   const bump = await select({
-    message: `${manifest.tag} version: ${currentVersion}. Bump?`,
+    message: `${manifest.name} version: ${currentVersion}. Bump?`,
     options: [
       { value: "keep", label: `Keep ${currentVersion}`, hint: "fails if already published" },
       { value: "patch", label: `Patch (${semver.inc(currentVersion, "patch")})` },
@@ -152,7 +152,7 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
 
   const sha256Hash = createHash("sha256").update(bundleBuffer).digest("hex");
 
-  s.start(`Publishing ${manifest.tag}@${version}...`);
+  s.start(`Publishing ${manifest.name}@${version}...`);
 
   let publishData: Awaited<ReturnType<typeof requestPublish>>;
   try {
@@ -172,14 +172,14 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
     });
   } catch (err: any) {
     if (err.status === 409) {
-      s.stop(`${manifest.tag}@${version} already published — bump version to republish`);
+      s.stop(`${manifest.name}@${version} already published — bump version to republish`);
       process.exit(0);
     }
     s.stop(`Publish failed: ${err.message}`);
     process.exit(1);
   }
 
-  s.message(`Uploading ${manifest.tag} to CDN...`);
+  s.message(`Uploading ${manifest.name} to CDN...`);
   try {
     await uploadToR2(publishData.uploadUrl, bundleBuffer);
   } catch (err: any) {
@@ -187,10 +187,10 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
     process.exit(1);
   }
 
-  s.message(`Confirming ${manifest.tag}...`);
+  s.message(`Confirming ${manifest.name}...`);
   try {
     const result = await confirmPublish(hubUrl, token!, publishData.versionId);
-    s.stop(`Published ${manifest.tag}@${version}`);
+    s.stop(`Published ${manifest.name}@${version}`);
     log.info(`CDN: ${result.bundleUrl}`);
   } catch (err: any) {
     s.stop(`Confirmation failed: ${err.message}`);
