@@ -6,7 +6,6 @@ import { trpcMutate, trpcQuery } from "../utils/api";
 import { extractHost, getHostToken, storeHostToken } from "../utils/auth";
 
 interface RegistryWidget {
-  tag: string;
   name: string;
   version: string;
   bundleUrl: string;
@@ -29,20 +28,18 @@ async function uploadAndRegister(
   token: string,
 ): Promise<void> {
   const api = apiUrl.replace(/\/$/, "");
+  // Derive slug from bundleUrl (e.g. "./area.js" → "area")
+  const slug = widget.bundleUrl.replace(/^\.\//, "").replace(/\.js$/, "");
 
-  // Read the bundle file from dist/ (bundleUrl is relative like "./area.js")
-  const bundleFilename = widget.bundleUrl.replace(/^\.\//, "");
-  const bundlePath = resolve(distDir, bundleFilename);
-
+  const bundlePath = resolve(distDir, `${slug}.js`);
   if (!existsSync(bundlePath)) {
-    log.warn(`Bundle not found: ${bundlePath} — skipping ${widget.tag}`);
+    log.warn(`Bundle not found: ${bundlePath} — skipping ${slug}`);
     return;
   }
 
   const bundleContent = readFileSync(bundlePath, "utf-8");
 
-  // Upload bundle to API (local registry namespace)
-  const uploadRes = await fetch(`${api}/bundles/local/${widget.tag}`, {
+  const uploadRes = await fetch(`${api}/bundles/local/local/${slug}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/javascript",
@@ -52,10 +49,9 @@ async function uploadAndRegister(
   });
 
   if (!uploadRes.ok) {
-    throw new Error(`Failed to upload bundle for ${widget.tag}: HTTP ${uploadRes.status}`);
+    throw new Error(`Failed to upload bundle for ${slug}: HTTP ${uploadRes.status}`);
   }
 
-  // Register the widget with a local bundle path (skips redundant download)
   const manifest = { ...widget };
   delete (manifest as Record<string, unknown>).bundleUrl;
 
@@ -64,10 +60,10 @@ async function uploadAndRegister(
     path: "widget.register",
     token,
     input: {
-      tag: widget.tag,
-      name: widget.name,
+      scope: "local",
+      name: slug,
       version: widget.version,
-      bundleUrl: `/bundles/local/${widget.tag}/bundle.js`,
+      bundleUrl: `/bundles/local/local/${slug}/bundle.js`,
       manifestJson: JSON.stringify(manifest),
     },
   });
@@ -75,19 +71,20 @@ async function uploadAndRegister(
 
 /**
  * Read registry.json and upload all widget bundles.
- * @returns Array of widget tags that were registered
+ * @returns Array of widget slugs that were registered
  */
 async function uploadAllWidgets(apiUrl: string, distDir: string, token: string): Promise<string[]> {
   const registryPath = resolve(distDir, "registry.json");
   const registry: RegistryJson = JSON.parse(readFileSync(registryPath, "utf-8"));
-  const tags: string[] = [];
+  const slugs: string[] = [];
 
   for (const widget of registry.widgets) {
+    const slug = widget.bundleUrl.replace(/^\.\//, "").replace(/\.js$/, "");
     await uploadAndRegister(apiUrl, distDir, widget, token);
-    tags.push(widget.tag);
+    slugs.push(slug);
   }
 
-  return tags;
+  return slugs;
 }
 
 export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
@@ -126,7 +123,7 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
   const existingToken = getHostToken(host);
   if (existingToken) {
     try {
-      const check = await fetch(`${api}/trpc/appConfig.get`, {
+      const check = await fetch(`${api}/api/auth/get-session`, {
         headers: { Authorization: `Bearer ${existingToken}` },
       });
       if (check.ok) {
@@ -303,7 +300,7 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
       const widget = registry.widgets.find((w) => w.bundleUrl === `./${widgetName}.js`);
       if (widget) {
         await uploadAndRegister(apiUrl, distDir, widget, token);
-        log.info(`Rebuilt & uploaded ${widget.tag}`);
+        log.info(`Rebuilt & uploaded ${widgetName}`);
       } else {
         log.warn(`No registry entry for ${widgetName} — skipping upload`);
       }
@@ -333,13 +330,13 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
     log.info("\nDisconnecting...");
     watcher.close();
 
-    for (const tag of registeredTags) {
+    for (const slug of registeredTags) {
       try {
         await trpcMutate({
           apiUrl: api,
           path: "widget.unregister",
           token,
-          input: { tag },
+          input: { scope: "local", name: slug },
         });
       } catch {
         // Non-fatal — API may be down
