@@ -35,7 +35,7 @@ This creates `src/{widget-name}/index.tsx` and `src/{widget-name}/manifest.json`
 Connect your widgets to a running GlassHome instance:
 
 ```bash
-bun widget connect http://<dashboard-api-host>:3333
+bun widget connect http://homeassistant.local:3123
 ```
 
 This builds all widgets, serves them on your LAN IP, registers them with the dashboard, and watches for file changes. Widgets hot-reload as you edit.
