@@ -27,7 +27,6 @@ const WIDGET_NAMEWidget: Component<{ config: WidgetConfig }> = (props) => {
 
 export default defineWidget<WidgetConfig>({
   manifest: {
-    tag: "WIDGET_TAG",
     name: "WIDGET_NAME",
     minSize: { w: 1, h: 1 },
     maxSize: { w: 4, h: 4 },

@@ -56,7 +56,7 @@ PROJECT_NAME/
 Each widget subdirectory contains:
 
 - **`index.tsx`** — SolidJS component + `defineWidget()` registration
-- **`manifest.json`** — metadata (tag, name, type, size, version)
+- **`manifest.json`** — metadata (name, description, size, version)
 
 ## CLI commands
 

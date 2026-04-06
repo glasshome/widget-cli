@@ -15,11 +15,10 @@ export function scaffoldWidget(
   cwd: string,
   opts: {
     widgetName: string;
-    tag: string;
     description: string;
   },
 ): void {
-  const { widgetName, tag, description } = opts;
+  const { widgetName, description } = opts;
   const widgetDir = resolve(cwd, "src", widgetName);
 
   if (existsSync(widgetDir)) {
@@ -34,13 +33,11 @@ export function scaffoldWidget(
   // Read index.tsx template from the template directory
   const templateDir = resolve(import.meta.dir, "../../template");
   let srcContent = readFileSync(resolve(templateDir, "src/index.tsx.template"), "utf-8");
-  srcContent = srcContent.replace(/WIDGET_TAG/g, tag);
   srcContent = srcContent.replace(/WIDGET_NAME/g, displayName);
   writeFileSync(resolve(widgetDir, "index.tsx"), srcContent);
 
   // Generate manifest.json
   const manifest = {
-    tag,
     name: displayName,
     description: widgetDescription,
     minSize: { w: 1, h: 1 },
@@ -55,7 +52,6 @@ export function scaffoldWidget(
 /** Interactive prompts for widget details. Returns null if cancelled. */
 export async function promptWidgetDetails(defaults?: { widgetName?: string }): Promise<{
   widgetName: string;
-  tag: string;
   description: string;
 } | null> {
   const widgetName = await text({
@@ -75,23 +71,6 @@ export async function promptWidgetDetails(defaults?: { widgetName?: string }): P
     return null;
   }
 
-  const tag = await text({
-    message: "Custom element tag",
-    placeholder: `glasshome-${widgetName}`,
-    defaultValue: `glasshome-${widgetName}`,
-    validate(value) {
-      if (!value) return "Tag is required";
-      if (!/^[a-z]/.test(value)) return "Tag must start with a lowercase letter";
-      if (!value.includes("-")) return "Custom element tags must contain a hyphen";
-      if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)+$/.test(value))
-        return "Tag must be lowercase alphanumeric with hyphens (e.g. glasshome-my-widget)";
-    },
-  });
-  if (isCancel(tag)) {
-    cancel("Operation cancelled.");
-    return null;
-  }
-
   const description = await text({
     message: "Description (optional)",
     placeholder: "A GlassHome dashboard widget",
@@ -104,7 +83,6 @@ export async function promptWidgetDetails(defaults?: { widgetName?: string }): P
 
   return {
     widgetName: widgetName as string,
-    tag: tag as string,
     description: description as string,
   };
 }
