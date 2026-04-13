@@ -14,7 +14,17 @@ import {
 } from "../utils/manifest";
 import { runLogin } from "./login";
 
-export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<void> {
+interface PublishOptions {
+  name?: string;
+  bump?: "keep" | "patch" | "minor" | "major";
+  scope?: string;
+}
+
+export async function runPublish(
+  cwd: string,
+  hubUrlOverride?: string,
+  options?: PublishOptions,
+): Promise<void> {
   const s = spinner();
 
   // Step 1: Validate (quiet)
@@ -53,7 +63,15 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
   }
 
   let scope: string;
-  if (scopes.length === 1) {
+  if (options?.scope) {
+    const match = scopes.find((s) => s.name === options.scope);
+    if (!match) {
+      log.error(`Scope @${options.scope} not found. Available: ${scopes.map((s) => s.name).join(", ")}`);
+      process.exit(1);
+    }
+    scope = match.name;
+    log.info(`Publishing as @${scope} (${match.type})`);
+  } else if (scopes.length === 1) {
     const only = scopes[0]!;
     scope = only.name;
     log.info(`Publishing as @${scope} (${only.type})`);
@@ -76,48 +94,65 @@ export async function runPublish(cwd: string, hubUrlOverride?: string): Promise<
 
   // Step 4: Select widget
   const widgets = discoverWidgets(cwd);
-  const widgetOptions = widgets.map((name) => {
-    const manifest = readManifest(cwd, name);
-    let sizeInfo = "";
-    try {
-      const info = getWidgetBundleInfo(cwd, name);
-      sizeInfo = ` — ${formatBytes(info.raw)}`;
-    } catch {}
-    return {
-      value: name,
-      label: `${manifest.name}${sizeInfo}`,
-    };
-  });
 
-  const selected = await select({
-    message: "Select widget to publish:",
-    options: widgetOptions,
-  });
+  let widgetName: string;
+  if (options?.name) {
+    if (!widgets.includes(options.name)) {
+      log.error(`Widget "${options.name}" not found. Available: ${widgets.join(", ")}`);
+      process.exit(1);
+    }
+    widgetName = options.name;
+  } else {
+    const widgetOptions = widgets.map((name) => {
+      const manifest = readManifest(cwd, name);
+      let sizeInfo = "";
+      try {
+        const info = getWidgetBundleInfo(cwd, name);
+        sizeInfo = ` — ${formatBytes(info.raw)}`;
+      } catch {}
+      return {
+        value: name,
+        label: `${manifest.name}${sizeInfo}`,
+      };
+    });
 
-  if (isCancel(selected)) {
-    cancel("Publish cancelled.");
-    process.exit(0);
+    const selected = await select({
+      message: "Select widget to publish:",
+      options: widgetOptions,
+    });
+
+    if (isCancel(selected)) {
+      cancel("Publish cancelled.");
+      process.exit(0);
+    }
+    widgetName = selected as string;
   }
 
-  const widgetName = selected as string;
   const manifest = readManifest(cwd, widgetName);
 
   // Step 5: Version bump (per-widget, from manifest)
   const currentVersion = manifest.version ?? "0.0.0";
 
-  const bump = await select({
-    message: `${manifest.name} version: ${currentVersion}. Bump?`,
-    options: [
-      { value: "keep", label: `Keep ${currentVersion}`, hint: "fails if already published" },
-      { value: "patch", label: `Patch (${semver.inc(currentVersion, "patch")})` },
-      { value: "minor", label: `Minor (${semver.inc(currentVersion, "minor")})` },
-      { value: "major", label: `Major (${semver.inc(currentVersion, "major")})` },
-    ],
-  });
+  let bump: string;
+  if (options?.bump) {
+    bump = options.bump;
+    log.info(`Version: ${currentVersion} → ${bump === "keep" ? currentVersion : semver.inc(currentVersion, bump) ?? currentVersion}`);
+  } else {
+    const choice = await select({
+      message: `${manifest.name} version: ${currentVersion}. Bump?`,
+      options: [
+        { value: "keep", label: `Keep ${currentVersion}`, hint: "fails if already published" },
+        { value: "patch", label: `Patch (${semver.inc(currentVersion, "patch")})` },
+        { value: "minor", label: `Minor (${semver.inc(currentVersion, "minor")})` },
+        { value: "major", label: `Major (${semver.inc(currentVersion, "major")})` },
+      ],
+    });
 
-  if (isCancel(bump)) {
-    cancel("Publish cancelled.");
-    process.exit(0);
+    if (isCancel(choice)) {
+      cancel("Publish cancelled.");
+      process.exit(0);
+    }
+    bump = choice as string;
   }
 
   let version = currentVersion;

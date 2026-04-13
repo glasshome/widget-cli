@@ -43,6 +43,8 @@ Examples:
   glasshome-widget info
   glasshome-widget info clock
   glasshome-widget publish
+  glasshome-widget publish --name light --bump patch
+  glasshome-widget publish --name light --bump minor --scope glasshome
   glasshome-widget login
   glasshome-widget login https://my-hub.example.com
   glasshome-widget upgrade
@@ -130,9 +132,19 @@ switch (effectiveCommand) {
   }
 
   case "publish": {
-    const hubUrlArg = args[0];
+    const hubUrlArg = args.find((a) => !a.startsWith("--"));
+    const nameIdx = rawArgs.indexOf("--name");
+    const bumpIdx = rawArgs.indexOf("--bump");
+    const scopeIdx = rawArgs.indexOf("--scope");
+    const pubName = nameIdx !== -1 ? rawArgs[nameIdx + 1] : undefined;
+    const pubBump = bumpIdx !== -1 ? rawArgs[bumpIdx + 1] : undefined;
+    const pubScope = scopeIdx !== -1 ? rawArgs[scopeIdx + 1] : undefined;
     const { runPublish } = await import("../src/commands/publish");
-    await runPublish(resolveWidgetDir(), hubUrlArg);
+    await runPublish(resolveWidgetDir(), hubUrlArg, {
+      name: pubName,
+      bump: pubBump as "keep" | "patch" | "minor" | "major" | undefined,
+      scope: pubScope,
+    });
     outro("Done");
     break;
   }
