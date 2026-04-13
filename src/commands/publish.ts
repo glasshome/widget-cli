@@ -136,7 +136,7 @@ export async function runPublish(
   let bump: string;
   if (options?.bump) {
     bump = options.bump;
-    log.info(`Version: ${currentVersion} → ${bump === "keep" ? currentVersion : semver.inc(currentVersion, bump) ?? currentVersion}`);
+    log.info(`Version: ${currentVersion} → ${bump === "keep" ? currentVersion : semver.inc(currentVersion, bump as semver.ReleaseType) ?? currentVersion}`);
   } else {
     const choice = await select({
       message: `${manifest.name} version: ${currentVersion}. Bump?`,
