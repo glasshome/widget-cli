@@ -51,16 +51,25 @@ Examples:
   glasshome-widget publish --dir packages/widgets
 `.trim();
 
-const rawArgs = process.argv.slice(2);
-const dirFlagIdx = rawArgs.indexOf("--dir");
-let explicitDir: string | undefined;
-if (dirFlagIdx !== -1) {
-  explicitDir = rawArgs[dirFlagIdx + 1];
-  rawArgs.splice(dirFlagIdx, 2);
-}
-const [command, ...args] = rawArgs;
+import { parseArgs } from "node:util";
 
-if (command === "help" || command === "--help" || command === "-h") {
+const { values: flags, positionals } = parseArgs({
+  args: process.argv.slice(2),
+  options: {
+    dir: { type: "string" },
+    name: { type: "string" },
+    bump: { type: "string" },
+    scope: { type: "string" },
+    help: { type: "boolean", short: "h" },
+  },
+  allowPositionals: true,
+  strict: false,
+});
+
+const explicitDir = flags.dir;
+const [command, ...args] = positionals;
+
+if (command === "help" || flags.help) {
   console.log(HELP);
   process.exit(0);
 }
@@ -132,18 +141,12 @@ switch (effectiveCommand) {
   }
 
   case "publish": {
-    const hubUrlArg = args.find((a) => !a.startsWith("--"));
-    const nameIdx = rawArgs.indexOf("--name");
-    const bumpIdx = rawArgs.indexOf("--bump");
-    const scopeIdx = rawArgs.indexOf("--scope");
-    const pubName = nameIdx !== -1 ? rawArgs[nameIdx + 1] : undefined;
-    const pubBump = bumpIdx !== -1 ? rawArgs[bumpIdx + 1] : undefined;
-    const pubScope = scopeIdx !== -1 ? rawArgs[scopeIdx + 1] : undefined;
+    const hubUrlArg = args[0];
     const { runPublish } = await import("../src/commands/publish");
     await runPublish(resolveWidgetDir(), hubUrlArg, {
-      name: pubName,
-      bump: pubBump as "keep" | "patch" | "minor" | "major" | undefined,
-      scope: pubScope,
+      name: flags.name,
+      bump: flags.bump as "keep" | "patch" | "minor" | "major" | undefined,
+      scope: flags.scope,
     });
     outro("Done");
     break;
