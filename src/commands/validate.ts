@@ -32,6 +32,16 @@ function validateManifest(manifest: WidgetManifest): ValidationResult {
   if (!manifest.name) errors.push("Missing required field: name");
   if (!manifest.sdkVersion) errors.push("Missing required field: sdkVersion");
 
+  // INS-05: "*" sdkVersion is rejected at publish time — authors must declare
+  // a real range (e.g. "^0.3.0"). Installed widgets that already ship "*" are
+  // still tolerated by the loader with a warn-and-mount, but new publishes
+  // are blocked here.
+  if (manifest.sdkVersion === "*") {
+    errors.push(
+      `sdkVersion "*" is not allowed — declare a semver range (e.g. "^0.3.0") to opt into host compatibility checks`,
+    );
+  }
+
   // Size validation
   if (!hasValidMinSize) {
     errors.push("minSize must be an object with numeric w and h properties");
