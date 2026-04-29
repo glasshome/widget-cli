@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^0.10.0",
-    "@glasshome/widget-sdk": "0.3.1",
+    "@glasshome/widget-sdk": "0.3.4",
     "open": "^11.0.0",
     "semver": "^7.6.0",
     "vite-plugin-solid": "^2.11.0"
