@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { log, spinner } from "@clack/prompts";
 import { buildWidgets } from "@glasshome/widget-sdk/vite";
 import { trpcMutate, trpcQuery } from "../utils/api";
-import { extractHost, getHostToken, storeHostToken } from "../utils/auth";
+import { clearHostToken, extractHost, getHostToken, storeHostToken } from "../utils/auth";
 
 interface RegistryWidget {
   name: string;
@@ -127,9 +127,16 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
         headers: { Authorization: `Bearer ${existingToken}` },
       });
       if (check.ok) {
-        token = existingToken;
-        log.info("Using stored credentials for dashboard.");
+        const body = (await check.json()) as { session?: unknown } | null;
+        if (body?.session) {
+          token = existingToken;
+          log.info("Using stored credentials for dashboard.");
+        } else {
+          clearHostToken(host);
+          log.warn("Stored credentials expired — re-authenticating.");
+        }
       } else {
+        clearHostToken(host);
         log.warn("Stored credentials expired — re-authenticating.");
       }
     } catch {
