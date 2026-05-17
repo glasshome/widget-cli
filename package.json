@@ -1,6 +1,6 @@
 {
   "name": "@glasshome/widget-cli",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "description": "CLI for creating and managing GlassHome widgets",
   "type": "module",
   "bin": {
@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^0.10.0",
-    "@glasshome/widget-sdk": "0.3.7",
+    "@glasshome/widget-sdk": "^0.4.0",
     "open": "^11.0.0",
     "semver": "^7.6.0",
     "vite-plugin-solid": "^2.11.0"
