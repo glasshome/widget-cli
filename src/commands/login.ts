@@ -4,10 +4,12 @@ import { log, spinner } from "@clack/prompts";
 import open from "open";
 import { getHubUrl, storeToken } from "../utils/auth";
 
+// Public client: PKCE authenticates it, no client secret. The redirect is an
+// IP-loopback URI (RFC 8252) registered on the hub.
 const CLIENT_ID = "glasshome-widget-cli";
-const CLIENT_SECRET = "glasshome-cli-public";
+const REDIRECT_HOST = "127.0.0.1";
 const REDIRECT_PORT = 9274;
-const REDIRECT_URI = `http://localhost:${REDIRECT_PORT}/callback`;
+const REDIRECT_URI = `http://${REDIRECT_HOST}:${REDIRECT_PORT}/callback`;
 const LOGIN_TIMEOUT_MS = 120_000;
 
 function base64url(buf: Buffer): string {
@@ -35,7 +37,7 @@ export async function runLogin(hubUrl?: string): Promise<void> {
     }, LOGIN_TIMEOUT_MS);
 
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-      const url = new URL(req.url!, `http://localhost:${REDIRECT_PORT}`);
+      const url = new URL(req.url!, `http://${REDIRECT_HOST}:${REDIRECT_PORT}`);
 
       if (url.pathname !== "/callback") {
         res.writeHead(404);
@@ -70,7 +72,7 @@ export async function runLogin(hubUrl?: string): Promise<void> {
       resolve({ code, receivedState });
     });
 
-    server.listen(REDIRECT_PORT, () => {
+    server.listen(REDIRECT_PORT, REDIRECT_HOST, () => {
       const authUrl = new URL(`${hub}/api/auth/oauth2/authorize`);
       authUrl.searchParams.set("client_id", CLIENT_ID);
       authUrl.searchParams.set("redirect_uri", REDIRECT_URI);
@@ -109,7 +111,6 @@ export async function runLogin(hubUrl?: string): Promise<void> {
       redirect_uri: REDIRECT_URI,
       code_verifier: codeVerifier,
       client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
     }),
   });
 

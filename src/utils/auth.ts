@@ -114,7 +114,6 @@ export async function getToken(hubUrl: string): Promise<string | null> {
         grant_type: "refresh_token",
         refresh_token: stored.refreshToken,
         client_id: "glasshome-widget-cli",
-        client_secret: "glasshome-cli-public",
       }),
     });
 
