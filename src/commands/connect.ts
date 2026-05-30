@@ -165,15 +165,16 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
       const data = (await res.json()) as {
         device_code: string;
         user_code: string;
-        verification_uri_complete: string;
+        verification_uri: string;
+        verification_uri_complete?: string;
         expires_in: number;
         interval: number;
       };
       deviceCode = data.device_code;
       userCode = data.user_code;
-      // Build verification URL from the dashboard URL the user provided,
-      // not the API response (which uses the API server's origin)
-      verificationUriComplete = `${api}/device?user_code=${data.user_code}`;
+      verificationUriComplete =
+        data.verification_uri_complete ??
+        `${data.verification_uri}?user_code=${encodeURIComponent(data.user_code)}`;
       expiresIn = data.expires_in;
       interval = data.interval ?? 5;
     } catch (err) {
@@ -215,12 +216,19 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
           });
 
           if (res.ok) {
+            // better-auth's device-authorization plugin returns a
+            // first-party session, not an OIDC token bundle. The bearer is
+            // session.token; expiry is session.expiresAt (ISO/epoch/Date).
             const data = (await res.json()) as {
-              access_token: string;
-              expires_in: number;
+              session?: { token: string; expiresAt: string | number | Date };
+              user?: unknown;
             };
-            token = data.access_token;
-            const tokenExpiresAt = Date.now() + data.expires_in * 1000;
+            if (!data.session?.token) {
+              s.stop("Auth response missing session token");
+              break;
+            }
+            token = data.session.token;
+            const tokenExpiresAt = new Date(data.session.expiresAt).getTime();
             storeHostToken(host, token, tokenExpiresAt);
             break;
           }
@@ -287,35 +295,66 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
   const registeredTags = await uploadAllWidgets(apiUrl, distDir, token);
   s.stop("Widgets registered");
 
-  // Step 6: Watch src/ for changes and rebuild + re-upload only the changed widget
+  // Step 6: Watch src/ for changes and rebuild + re-upload only the changed widget.
+  //
+  // Debounce strategy: collect changed widget names into `pending`, fire after
+  // DEBOUNCE_MS of quiet. If new changes arrive while a build is in flight,
+  // they accumulate and trigger one more pass after the current build finishes.
+  // Replaces a previous `rebuilding` boolean guard that silently dropped events
+  // arriving during a build (lost edits) and was vulnerable to Linux fs.watch
+  // coalescing two rapid writes into one event with stale content.
   const srcDir = resolve(cwd, "src");
-  let rebuilding = false;
-  const watcher = watch(srcDir, { recursive: true }, async (_event, filename) => {
-    if (rebuilding || !filename) return;
-    rebuilding = true;
+  const DEBOUNCE_MS = 150;
+  const pending = new Set<string>();
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let buildInFlight = false;
+
+  async function flush(): Promise<void> {
+    debounceTimer = null;
+    if (buildInFlight) return;
+    if (pending.size === 0) return;
+
+    const widgets = [...pending];
+    pending.clear();
+    buildInFlight = true;
+
     try {
-      // Determine which widget changed from the file path (first path segment under src/)
-      const widgetName = filename.split(/[\\/]/)[0] ?? filename;
       const origCwd = process.cwd();
       process.chdir(cwd);
-      await buildWidgets({ ...buildOpts, only: [widgetName] });
-      process.chdir(origCwd);
+      try {
+        await buildWidgets({ ...buildOpts, only: widgets });
+      } finally {
+        process.chdir(origCwd);
+      }
 
-      // Upload only the changed widget
       const registryPath = resolve(distDir, "registry.json");
       const registry: RegistryJson = JSON.parse(readFileSync(registryPath, "utf-8"));
-      const widget = registry.widgets.find((w) => w.bundleUrl === `./${widgetName}.js`);
-      if (widget) {
-        await uploadAndRegister(apiUrl, distDir, widget, token);
-        log.info(`Rebuilt & uploaded ${widgetName}`);
-      } else {
-        log.warn(`No registry entry for ${widgetName} — skipping upload`);
+      for (const widgetName of widgets) {
+        const widget = registry.widgets.find((w) => w.bundleUrl === `./${widgetName}.js`);
+        if (widget) {
+          await uploadAndRegister(apiUrl, distDir, widget, token);
+          log.info(`Rebuilt & uploaded ${widgetName}`);
+        } else {
+          log.warn(`No registry entry for ${widgetName} — skipping upload`);
+        }
       }
     } catch (err) {
       log.warn(`Rebuild failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      rebuilding = false;
+      buildInFlight = false;
+      // Re-flush if events accumulated during this build.
+      if (pending.size > 0) {
+        flush();
+      }
     }
+  }
+
+  const watcher = watch(srcDir, { recursive: true }, (_event, filename) => {
+    if (!filename) return;
+    const widgetName = filename.split(/[\\/]/)[0] ?? filename;
+    pending.add(widgetName);
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(flush, DEBOUNCE_MS);
   });
 
   // Count widgets
@@ -335,6 +374,7 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
   // Step 7: Handle SIGINT — unregister and clean up
   const cleanup = async () => {
     log.info("\nDisconnecting...");
+    if (debounceTimer) clearTimeout(debounceTimer);
     watcher.close();
 
     for (const slug of registeredTags) {
