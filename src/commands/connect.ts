@@ -216,19 +216,19 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
           });
 
           if (res.ok) {
-            // better-auth's device-authorization plugin returns a
-            // first-party session, not an OIDC token bundle. The bearer is
-            // session.token; expiry is session.expiresAt (ISO/epoch/Date).
+            // better-auth's device-authorization plugin returns an OAuth-style
+            // bundle: { access_token, token_type, expires_in, scope }. The
+            // access_token IS the first-party session token.
             const data = (await res.json()) as {
-              session?: { token: string; expiresAt: string | number | Date };
-              user?: unknown;
+              access_token?: string;
+              expires_in?: number;
             };
-            if (!data.session?.token) {
+            if (!data.access_token) {
               s.stop("Auth response missing session token");
               break;
             }
-            token = data.session.token;
-            const tokenExpiresAt = new Date(data.session.expiresAt).getTime();
+            token = data.access_token;
+            const tokenExpiresAt = Date.now() + (data.expires_in ?? 0) * 1000;
             storeHostToken(host, token, tokenExpiresAt);
             break;
           }
