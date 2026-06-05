@@ -66,7 +66,12 @@ const { values: flags, positionals } = parseArgs({
   strict: false,
 });
 
-const explicitDir = flags.dir;
+// strict:false widens every flag to string | boolean | undefined; a bare
+// `--flag` with no value parses as `true`, which no string option accepts.
+const str = (v: string | boolean | undefined): string | undefined =>
+  typeof v === "string" ? v : undefined;
+
+const explicitDir = str(flags.dir);
 const [command, ...args] = positionals;
 
 if (command === "help" || flags.help) {
@@ -144,9 +149,9 @@ switch (effectiveCommand) {
     const hubUrlArg = args[0];
     const { runPublish } = await import("../src/commands/publish");
     await runPublish(resolveWidgetDir(), hubUrlArg, {
-      name: flags.name,
-      bump: flags.bump as "keep" | "patch" | "minor" | "major" | undefined,
-      scope: flags.scope,
+      name: str(flags.name),
+      bump: str(flags.bump) as "keep" | "patch" | "minor" | "major" | undefined,
+      scope: str(flags.scope),
     });
     outro("Done");
     break;
