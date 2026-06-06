@@ -25,6 +25,7 @@ Commands:
   add                    Add a new widget to the project
   build                  Build all widgets (per-widget, self-contained bundles)
   connect <url>          Connect to a running dashboard for live testing
+                         --re-auth discards stored credentials and re-runs device approval
   validate [name]        Validate all widgets or a specific one
   publish [hub-url]      Build and publish a widget to Hub
   login [hub-url]        Authenticate with GlassHome Hub
@@ -60,6 +61,7 @@ const { values: flags, positionals } = parseArgs({
     name: { type: "string" },
     bump: { type: "string" },
     scope: { type: "string" },
+    "re-auth": { type: "boolean" },
     help: { type: "boolean", short: "h" },
   },
   allowPositionals: true,
@@ -119,7 +121,7 @@ switch (effectiveCommand) {
       process.exit(1);
     }
     const { runConnect } = await import("../src/commands/connect");
-    await runConnect(url, resolveWidgetDir());
+    await runConnect(url, resolveWidgetDir(), { reAuth: flags["re-auth"] === true });
     break;
   }
 

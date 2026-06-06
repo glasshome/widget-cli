@@ -87,7 +87,11 @@ async function uploadAllWidgets(apiUrl: string, distDir: string, token: string):
   return slugs;
 }
 
-export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
+export async function runConnect(
+  apiUrl: string,
+  cwd: string,
+  opts: { reAuth?: boolean } = {},
+): Promise<void> {
   const distDir = resolve(cwd, "dist");
   const solid = (await import("vite-plugin-solid")).default;
   const buildOpts = { srcDir: "src", outDir: "dist", plugins: [solid()] };
@@ -118,6 +122,11 @@ export async function runConnect(apiUrl: string, cwd: string): Promise<void> {
   const api = apiUrl.replace(/\/$/, "");
   const host = extractHost(api);
   let token = "";
+
+  if (opts.reAuth) {
+    clearHostToken(host);
+    log.info("Discarded stored credentials (--re-auth).");
+  }
 
   // Validate stored token before using it
   const existingToken = getHostToken(host);
