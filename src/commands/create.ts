@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { cancel, confirm, isCancel, log, spinner, text } from "@clack/prompts";
+import { getCliVersion } from "../utils/version";
 import { promptWidgetDetails, scaffoldWidget } from "./add";
 
 const templateDir = resolve(import.meta.dir, "../../template");
@@ -114,11 +115,15 @@ export async function runCreate() {
     const projectDesc =
       (projectDescription as string) || `A GlassHome widget project: ${projectName}`;
 
-    // Replace project-level placeholders in package.json
+    // Replace project-level placeholders in package.json. Pin the CLI to the
+    // version that scaffolded the project (caret) so `bun widget` resolves the
+    // project-local binary and `bun update` keeps it current, instead of a
+    // stale global/bunx copy.
     const pkgPath = join(targetDir, "package.json");
     let pkgContent = readFileSync(pkgPath, "utf-8");
     pkgContent = pkgContent.replace(/PROJECT_NAME/g, projectName as string);
     pkgContent = pkgContent.replace(/PROJECT_DESCRIPTION/g, projectDesc);
+    pkgContent = pkgContent.replace(/CLI_VERSION/g, `^${getCliVersion()}`);
     writeFileSync(pkgPath, pkgContent);
 
     // Replace project-level placeholders in README.md

@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { log, spinner } from "@clack/prompts";
 import open from "open";
 import { getHubUrl, storeToken } from "../utils/auth";
+import { enforceCliVersion, notifyCliUpdate } from "../utils/version";
 
 // Public client: PKCE authenticates it, no client secret. The redirect is an
 // IP-loopback URI (RFC 8252) registered on the hub.
@@ -18,6 +19,11 @@ function base64url(buf: Buffer): string {
 
 export async function runLogin(hubUrl?: string): Promise<void> {
   const hub = hubUrl ?? getHubUrl();
+
+  // Refuse to start the OAuth dance if the hub no longer supports this CLI;
+  // otherwise a stale client fails mid-flow with an opaque redirect error.
+  await enforceCliVersion(hub);
+  await notifyCliUpdate();
 
   // Generate PKCE parameters
   const codeVerifier = base64url(randomBytes(32));

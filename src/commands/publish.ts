@@ -12,6 +12,7 @@ import {
   readManifest,
   writeManifest,
 } from "../utils/manifest";
+import { enforceCliVersion } from "../utils/version";
 import { runLogin } from "./login";
 
 interface PublishOptions {
@@ -38,6 +39,10 @@ export async function runPublish(
   // Step 2: Authenticate
   const hubUrl = hubUrlOverride ?? getHubUrl();
   if (hubUrlOverride) log.info(`Hub: ${hubUrl}`);
+
+  // Stop an unsupported CLI before it uploads against a protocol it predates.
+  await enforceCliVersion(hubUrl);
+
   let token = await getToken(hubUrl);
 
   if (!token) {
