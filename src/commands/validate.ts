@@ -2,6 +2,11 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { log, spinner } from "@clack/prompts";
 import {
+  formatSchemaError,
+  publishManifestSchema,
+  requiresCapabilities,
+} from "@glasshome/widget-contract";
+import {
   discoverWidgets,
   formatBytes,
   getWidgetBundleInfo,
@@ -28,9 +33,17 @@ function validateManifest(manifest: WidgetManifest): ValidationResult {
     typeof manifest.maxSize.w === "number" &&
     typeof manifest.maxSize.h === "number";
 
-  // Required fields
-  if (!manifest.name) errors.push("Missing required field: name");
-  if (!manifest.sdkVersion) errors.push("Missing required field: sdkVersion");
+  // Canonical publish-time validation shared with the Hub.
+  const schemaResult = publishManifestSchema.safeParse(manifest);
+  if (!schemaResult.success) {
+    errors.push(`Manifest schema: ${formatSchemaError(schemaResult.error)}`);
+    const capabilities = (manifest as { capabilities?: unknown }).capabilities;
+    if (manifest.sdkVersion && requiresCapabilities(manifest.sdkVersion) && capabilities === undefined) {
+      errors.push(
+        `sdkVersion "${manifest.sdkVersion}" only admits SDK >= 1.0.0, so manifest.json must declare "capabilities" — use [] if the widget never reads or controls Home Assistant`,
+      );
+    }
+  }
 
   // INS-05: "*" sdkVersion is rejected at publish time — authors must declare
   // a real range (e.g. "^0.3.0"). Installed widgets that already ship "*" are
@@ -42,13 +55,7 @@ function validateManifest(manifest: WidgetManifest): ValidationResult {
     );
   }
 
-  // Size validation
-  if (!hasValidMinSize) {
-    errors.push("minSize must be an object with numeric w and h properties");
-  }
-  if (!hasValidMaxSize) {
-    errors.push("maxSize must be an object with numeric w and h properties");
-  }
+  // Size validation (cross-field checks the schema does not cover)
   if (
     manifest.defaultSize &&
     (typeof manifest.defaultSize.w !== "number" || typeof manifest.defaultSize.h !== "number")

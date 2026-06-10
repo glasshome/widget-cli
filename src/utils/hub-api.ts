@@ -29,6 +29,8 @@ interface PublishRequestParams {
   version: string;
   bundleSize: number;
   sha256Hash: string;
+  cssSize?: number;
+  cssSha256Hash?: string;
   manifestJson: string;
 }
 
@@ -37,11 +39,14 @@ interface PublishRequestResponse {
   cdnUrl: string;
   widgetId: string;
   versionId: string;
+  cssUploadUrl?: string;
+  cssUrl?: string;
 }
 
 interface PublishConfirmResponse {
   success: boolean;
   bundleUrl: string;
+  cssUrl?: string;
 }
 
 export async function requestPublish(
@@ -107,10 +112,14 @@ export async function confirmPublish(
   return res.json() as Promise<PublishConfirmResponse>;
 }
 
-export async function uploadToR2(uploadUrl: string, bundleBuffer: Uint8Array): Promise<void> {
+export async function uploadToR2(
+  uploadUrl: string,
+  bundleBuffer: Uint8Array,
+  contentType: string = "application/javascript",
+): Promise<void> {
   const res = await fetch(uploadUrl, {
     method: "PUT",
-    headers: { "Content-Type": "application/javascript" },
+    headers: { "Content-Type": contentType },
     body: bundleBuffer as unknown as BodyInit,
   });
 

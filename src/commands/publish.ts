@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { cancel, isCancel, log, select, spinner } from "@clack/prompts";
 import semver from "semver";
@@ -192,6 +192,17 @@ export async function runPublish(
 
   const sha256Hash = createHash("sha256").update(bundleBuffer).digest("hex");
 
+  // Optional stylesheet emitted next to the bundle; published alongside it
+  // so the Hub can serve and integrity-check both.
+  const cssPath = resolve(cwd, "dist", `${widgetName}.css`);
+  let cssBuffer: Buffer | null = null;
+  if (existsSync(cssPath)) {
+    cssBuffer = Buffer.from(readFileSync(cssPath));
+  }
+  const cssSha256Hash = cssBuffer
+    ? createHash("sha256").update(cssBuffer).digest("hex")
+    : undefined;
+
   s.start(`Publishing ${manifest.name}@${version}...`);
 
   let publishData: Awaited<ReturnType<typeof requestPublish>>;
@@ -208,6 +219,9 @@ export async function runPublish(
       version,
       bundleSize: bundleBuffer.byteLength,
       sha256Hash,
+      ...(cssBuffer && cssSha256Hash
+        ? { cssSize: cssBuffer.byteLength, cssSha256Hash }
+        : {}),
       manifestJson: JSON.stringify(manifest),
     });
   } catch (err: any) {
@@ -227,11 +241,28 @@ export async function runPublish(
     process.exit(1);
   }
 
+  if (cssBuffer) {
+    if (!publishData.cssUploadUrl) {
+      s.stop(
+        `dist/${widgetName}.css exists but the Hub did not return a css upload URL — update the Hub or remove the stylesheet`,
+      );
+      process.exit(1);
+    }
+    s.message(`Uploading ${manifest.name} styles to CDN...`);
+    try {
+      await uploadToR2(publishData.cssUploadUrl, cssBuffer, "text/css");
+    } catch (err: any) {
+      s.stop(`CSS upload failed: ${err.message}`);
+      process.exit(1);
+    }
+  }
+
   s.message(`Confirming ${manifest.name}...`);
   try {
     const result = await confirmPublish(hubUrl, token!, publishData.versionId);
     s.stop(`Published ${manifest.name}@${version}`);
     log.info(`CDN: ${result.bundleUrl}`);
+    if (result.cssUrl) log.info(`CSS: ${result.cssUrl}`);
   } catch (err: any) {
     s.stop(`Confirmation failed: ${err.message}`);
     process.exit(1);
