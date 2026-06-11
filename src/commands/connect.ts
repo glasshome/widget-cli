@@ -52,8 +52,28 @@ async function uploadAndRegister(
     throw new Error(`Failed to upload bundle for ${slug}: HTTP ${uploadRes.status}`);
   }
 
+  // Widgets render in shadow roots and need their own stylesheet uploaded
+  // alongside the bundle.
+  const cssPath = resolve(distDir, `${slug}.css`);
+  let cssUrl: string | undefined;
+  if (existsSync(cssPath)) {
+    const cssRes = await fetch(`${api}/bundles/local/local/${slug}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/css",
+        Authorization: `Bearer ${token}`,
+      },
+      body: readFileSync(cssPath, "utf-8"),
+    });
+    if (!cssRes.ok) {
+      throw new Error(`Failed to upload stylesheet for ${slug}: HTTP ${cssRes.status}`);
+    }
+    cssUrl = `/bundles/local/local/${slug}/bundle.css`;
+  }
+
   const manifest = { ...widget };
   delete (manifest as Record<string, unknown>).bundleUrl;
+  delete (manifest as Record<string, unknown>).cssUrl;
 
   await trpcMutate({
     apiUrl: api,
@@ -64,6 +84,7 @@ async function uploadAndRegister(
       name: slug,
       version: widget.version,
       bundleUrl: `/bundles/local/local/${slug}/bundle.js`,
+      ...(cssUrl ? { cssUrl } : {}),
       manifestJson: JSON.stringify(manifest),
     },
   });
@@ -94,7 +115,13 @@ export async function runConnect(
 ): Promise<void> {
   const distDir = resolve(cwd, "dist");
   const solid = (await import("vite-plugin-solid")).default;
-  const buildOpts = { srcDir: "src", outDir: "dist", plugins: [solid()] };
+  // delegateEvents: false — widgets run in closed shadow roots where Solid's
+  // document-level event delegation cannot see the target.
+  const buildOpts = {
+    srcDir: "src",
+    outDir: "dist",
+    plugins: [solid({ solid: { delegateEvents: false } })],
+  };
 
   // Step 1: Initial build
   const s = spinner();
