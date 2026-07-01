@@ -85,6 +85,17 @@ describe("migrateConfigSource — imports", () => {
     expect(r.warnings.map((w) => w.field)).toContain("custom");
   });
 
+  test("reflows a multiline SDK import to one name per line (no inline append)", () => {
+    const code = `import {\n  defineWidget,\n  Widget,\n  widgetFields,\n  z,\n} from "@glasshome/widget-sdk";\n\nexport const configSchema = z.object({ title: widgetFields.title() });\nexport type Config = z.infer<typeof configSchema>;`;
+    const r = migrateConfigSource(code, "widget.tsx");
+    // No line should carry more than one named import (the inline-append smell).
+    expect(r.code).not.toMatch(/\bfield, defineConfig\b/);
+    expect(r.code).toContain("\n  field,\n");
+    expect(r.code).toContain("\n  defineConfig,\n");
+    expect(r.code).toContain("\n  type Infer,\n");
+    expect(r.code).toContain('} from "@glasshome/widget-sdk";');
+  });
+
   test("rewrites a bare zod import to the SDK import", () => {
     const code = `import { defineWidget } from "@glasshome/widget-sdk";\nimport { z } from "zod";\n\nexport const configSchema = z.object({\n  custom: z.string().refine((v) => !!v).meta({ title: "X" }),\n});`;
     const r = migrateConfigSource(code, "widget.tsx");

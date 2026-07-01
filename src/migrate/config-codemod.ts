@@ -262,6 +262,17 @@ function rewriteNamedImport(
     !decl.getNamespaceImport()
   ) {
     decl.remove();
+    return;
+  }
+  // ts-morph appends new names inline onto the last line of a multiline import. Put
+  // each name back on its own line (order preserved, so no churn to existing imports);
+  // leave single-line imports as-is.
+  if (decl.getText().includes("\n")) {
+    const names = decl
+      .getNamedImports()
+      .map((n) => `  ${n.isTypeOnly() ? "type " : ""}${n.getName()},`)
+      .join("\n");
+    decl.replaceWithText(`import {\n${names}\n} from "${decl.getModuleSpecifierValue()}";`);
   }
 }
 
