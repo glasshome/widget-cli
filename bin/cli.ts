@@ -31,6 +31,8 @@ Commands:
   login [hub-url]        Authenticate with GlassHome Hub
   info [name]            Show widget metadata and bundle info
   upgrade                Upgrade @glasshome/widget-sdk to latest version
+  migrate config         Rewrite widgets' raw-zod config to defineConfig + field.*
+                         --name <widget> targets one; --dry previews without writing
   help                   Show this help message
 
 Examples:
@@ -62,6 +64,7 @@ const { values: flags, positionals } = parseArgs({
     bump: { type: "string" },
     scope: { type: "string" },
     "re-auth": { type: "boolean" },
+    dry: { type: "boolean" },
     help: { type: "boolean", short: "h" },
   },
   allowPositionals: true,
@@ -171,6 +174,22 @@ switch (effectiveCommand) {
     const { runUpgrade } = await import("../src/commands/upgrade");
     await runUpgrade(resolveWidgetDir());
     outro("Done");
+    break;
+  }
+
+  case "migrate": {
+    const target = args[0];
+    if (!target) {
+      log.error("Missing target. Usage: glasshome-widget migrate config [--name <widget>] [--dry]");
+      process.exit(1);
+    }
+    const { runMigrate } = await import("../src/commands/migrate");
+    const ok = await runMigrate(resolveWidgetDir(), target, {
+      dry: flags.dry === true,
+      name: str(flags.name),
+    });
+    outro(ok ? "Done" : "Migration failed");
+    process.exit(ok ? 0 : 1);
     break;
   }
 

@@ -4,6 +4,7 @@ import { log, spinner } from "@clack/prompts";
 import { buildWidgets } from "@glasshome/widget-sdk/vite";
 import { trpcMutate, trpcQuery } from "../utils/api";
 import { clearHostToken, extractHost, getHostToken, storeHostToken } from "../utils/auth";
+import { lintAndReport } from "../utils/lint-source";
 
 interface RegistryWidget {
   name: string;
@@ -137,6 +138,7 @@ export async function runConnect(
     process.exit(1);
   }
   s.stop("Build complete");
+  lintAndReport(cwd);
 
   // Step 2: Check registry was generated
   const registryPath = resolve(distDir, "registry.json");

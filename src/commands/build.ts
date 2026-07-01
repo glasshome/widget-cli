@@ -1,5 +1,6 @@
 import { log, spinner } from "@clack/prompts";
 import { buildWidgets } from "@glasshome/widget-sdk/vite";
+import { lintAndReport } from "../utils/lint-source";
 
 export async function runBuild(cwd: string): Promise<void> {
   const s = spinner();
@@ -14,6 +15,7 @@ export async function runBuild(cwd: string): Promise<void> {
       plugins: [solid()],
     });
     s.stop("Build complete");
+    lintAndReport(cwd);
   } catch (err) {
     s.stop("Build failed");
     log.error(err instanceof Error ? err.message : String(err));
