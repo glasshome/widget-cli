@@ -39,7 +39,7 @@ export async function runLogin(hubUrl?: string): Promise<void> {
   }>((resolve, reject) => {
     const timeout = setTimeout(() => {
       server.close();
-      reject(new Error("Login timed out — no response from browser within 120 seconds."));
+      reject(new Error("Login timed out, no response from browser within 120 seconds."));
     }, LOGIN_TIMEOUT_MS);
 
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
@@ -96,17 +96,16 @@ export async function runLogin(hubUrl?: string): Promise<void> {
     });
   });
 
-  s.stop("Login complete");
+  s.stop("Browser login complete");
 
-  // Verify state
+  // Verify state (spinner already stopped, use log, not s.stop)
   if (receivedState !== state) {
-    s.stop("Login failed");
     log.error("State mismatch. Possible CSRF attack.");
     process.exit(1);
   }
 
   // Exchange code for tokens
-  s.message("Exchanging code for tokens...");
+  s.start("Exchanging code for tokens...");
 
   const tokenRes = await fetch(`${hub}/api/auth/oauth2/token`, {
     method: "POST",

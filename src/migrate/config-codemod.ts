@@ -216,7 +216,7 @@ function buildShape(
   const lines: string[] = [];
   for (const prop of obj.getProperties()) {
     if (!Node.isPropertyAssignment(prop)) {
-      // Spread, shorthand, method — leave the whole thing untouched conservatively.
+      // Spread, shorthand, method, leave the whole thing untouched conservatively.
       lines.push(`${indent}  ${prop.getText()}`);
       warnings.push({
         field: prop.getText().slice(0, 40),

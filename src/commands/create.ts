@@ -9,7 +9,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { cancel, confirm, isCancel, log, spinner, text } from "@clack/prompts";
+import { cancel, confirm, isCancel, log, note, spinner, text } from "@clack/prompts";
+import color from "picocolors";
 import { getCliVersion } from "../utils/version";
 import { promptWidgetDetails, scaffoldWidget } from "./add";
 
@@ -157,8 +158,8 @@ export async function runCreate() {
       } else {
         installSpinner.stop(
           monorepoRoot
-            ? "Install failed — run `bun install` from the monorepo root"
-            : "Install failed — you can run `bun install` manually",
+            ? "Install failed, run `bun install` from the monorepo root"
+            : "Install failed, you can run `bun install` manually",
         );
       }
     }
@@ -167,7 +168,7 @@ export async function runCreate() {
     const inGitRepo = isInsideGitRepo(process.cwd());
 
     if (inGitRepo) {
-      log.info("Skipping git init — already in a git repository");
+      log.info("Skipping git init, already in a git repository");
     } else {
       const shouldGit = await confirm({
         message: "Initialize git repository?",
@@ -183,30 +184,29 @@ export async function runCreate() {
           Bun.spawnSync(["git", "commit", "-m", "Initial widget scaffold"], { cwd: targetDir });
           gitSpinner.stop("Git repository initialized");
         } else {
-          gitSpinner.stop("Git init failed — you can run `git init` manually");
+          gitSpinner.stop("Git init failed, you can run `git init` manually");
         }
       }
     }
 
     // Next-steps guide
-    log.info("");
-    log.step("Next steps:");
+    const cmd = (c: string, desc: string) => `${color.cyan(c.padEnd(30))} ${color.dim(desc)}`;
+    const steps: string[] = [];
     if (monorepoRoot) {
-      log.info("  bun install                Run from monorepo root to link workspace packages");
-      log.info(`  cd ${projectName}`);
+      steps.push(cmd("bun install", "from monorepo root, links workspace packages"));
+      steps.push(color.cyan(`cd ${projectName}`));
     } else {
-      log.info(`  cd ${projectName}`);
-      if (isCancel(shouldInstall) || !shouldInstall) {
-        log.info("  bun install");
-      }
+      steps.push(color.cyan(`cd ${projectName}`));
+      if (isCancel(shouldInstall) || !shouldInstall) steps.push(color.cyan("bun install"));
     }
-    log.info("  glasshome-widget connect <url>   Connect to a running dashboard for live testing");
-    log.info("  glasshome-widget add             Add another widget to the project");
-    log.info("  glasshome-widget build            Build all widgets");
-    log.info("  glasshome-widget validate        Validate all widgets");
-    log.info("  glasshome-widget publish          Build & publish to GlassHome Hub");
-    log.info("  glasshome-widget info             Show widget metadata");
-    log.info("  glasshome-widget upgrade          Upgrade @glasshome/widget-sdk");
+    steps.push(cmd("bun widget connect <url>", "connect to a dashboard for live testing"));
+    steps.push(cmd("bun widget add", "add another widget"));
+    steps.push(cmd("bun widget build", "build all widgets"));
+    steps.push(cmd("bun widget validate", "validate all widgets"));
+    steps.push(cmd("bun widget publish", "build & publish to GlassHome Hub"));
+    steps.push(cmd("bun widget info", "show widget metadata"));
+    steps.push(cmd("bun widget upgrade", "upgrade @glasshome/widget-sdk"));
+    note(steps.join("\n"), "Next steps");
   } catch (err) {
     s.stop("Failed to scaffold widget project.");
     rmSync(targetDir, { recursive: true, force: true });

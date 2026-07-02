@@ -40,18 +40,18 @@ function validateManifest(manifest: WidgetManifest): ValidationResult {
     const capabilities = (manifest as { capabilities?: unknown }).capabilities;
     if (manifest.sdkVersion && requiresCapabilities(manifest.sdkVersion) && capabilities === undefined) {
       errors.push(
-        `sdkVersion "${manifest.sdkVersion}" only admits SDK >= 1.0.0, so manifest.json must declare "capabilities" — use [] if the widget never reads or controls Home Assistant`,
+        `sdkVersion "${manifest.sdkVersion}" only admits SDK >= 1.0.0, so manifest.json must declare "capabilities", use [] if the widget never reads or controls Home Assistant`,
       );
     }
   }
 
-  // INS-05: "*" sdkVersion is rejected at publish time — authors must declare
+  // INS-05: "*" sdkVersion is rejected at publish time, authors must declare
   // a real range (e.g. "^0.3.0"). Installed widgets that already ship "*" are
   // still tolerated by the loader with a warn-and-mount, but new publishes
   // are blocked here.
   if (manifest.sdkVersion === "*") {
     errors.push(
-      `sdkVersion "*" is not allowed — declare a semver range (e.g. "^0.3.0") to opt into host compatibility checks`,
+      `sdkVersion "*" is not allowed, declare a semver range (e.g. "^0.3.0") to opt into host compatibility checks`,
     );
   }
 
@@ -156,7 +156,7 @@ export async function runValidate(
   const failed: string[] = [];
 
   for (const name of toValidate) {
-    if (!quiet) log.info(`\nValidating widget: ${name}`);
+    if (!quiet) log.step(name);
 
     // Read and validate manifest.json
     let manifest: WidgetManifest;
@@ -211,7 +211,7 @@ export async function runValidate(
   // Validate registry.json
   const registry = readRegistry(cwd);
   if (!registry) {
-    if (!quiet) log.error("\ndist/registry.json not found");
+    if (!quiet) log.error("dist/registry.json not found");
     allPassed = false;
   } else {
     const registryTags = new Set(registry.widgets.map((w) => w.bundleUrl));
@@ -221,20 +221,16 @@ export async function runValidate(
         allPassed = false;
       }
     }
-    if (!quiet) log.info(`\nRegistry: ${registry.widgets.length} widget(s)`);
+    if (!quiet) log.info(`Registry: ${registry.widgets.length} widget(s)`);
   }
 
+  // Quiet callers (publish) get a one-line summary; interactive runs let the
+  // caller's outro own the final banner so it isn't printed twice.
   if (quiet) {
     if (allPassed) {
       log.success(`Validated ${toValidate.length} widget(s)`);
     } else {
       log.error(`Validation failed for: ${failed.join(", ")}`);
-    }
-  } else {
-    if (allPassed) {
-      log.success("\nAll checks passed");
-    } else {
-      log.error("\nValidation failed");
     }
   }
 

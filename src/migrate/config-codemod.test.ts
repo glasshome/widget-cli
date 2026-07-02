@@ -6,7 +6,7 @@ function migrate(body: string) {
   return migrateConfigSource(code, "widget.tsx");
 }
 
-describe("migrateConfigSource — field kinds", () => {
+describe("migrateConfigSource, field kinds", () => {
   test("widgetFields.* map to field.*", () => {
     const r = migrate(
       `export const configSchema = z.object({\n  title: widgetFields.title(),\n  area: widgetFields.areaId(),\n  lights: widgetFields.entityIds("light"),\n  th: widgetFields.singleEntity("sensor", { deviceClass: "temperature" }),\n});`,
@@ -60,7 +60,7 @@ describe("migrateConfigSource — field kinds", () => {
   });
 });
 
-describe("migrateConfigSource — imports", () => {
+describe("migrateConfigSource, imports", () => {
   test("adds defineConfig/field/Infer, drops widgetFields/z when unused", () => {
     const r = migrate(
       `export const configSchema = z.object({ title: widgetFields.title() });\nexport type Config = z.infer<typeof configSchema>;`,
@@ -69,7 +69,7 @@ describe("migrateConfigSource — imports", () => {
     expect(importLine).toContain("defineConfig");
     expect(importLine).toContain("field");
     expect(importLine).toContain("Infer");
-    // `Infer` is a type — must be type-only for verbatimModuleSyntax widgets.
+    // `Infer` is a type, must be type-only for verbatimModuleSyntax widgets.
     expect(importLine).toContain("type Infer");
     expect(importLine).not.toContain("widgetFields");
     expect(importLine).not.toContain(" z,");
@@ -105,7 +105,7 @@ describe("migrateConfigSource — imports", () => {
   });
 });
 
-describe("migrateConfigSource — report and skip (never drop validation)", () => {
+describe("migrateConfigSource, report and skip (never drop validation)", () => {
   test("factory-built + identifier fields are left raw and reported", () => {
     const r = migrate(
       `const powerEntity = (l: string) => z.array(z.string()).default([]).meta({ domain: "sensor", title: l });\nexport const configSchema = z.object({\n  title: widgetFields.title(),\n  solar: powerEntity("Solar"),\n  strategy: consumptionStrategy,\n});`,

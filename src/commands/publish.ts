@@ -113,7 +113,7 @@ export async function runPublish(
       let sizeInfo = "";
       try {
         const info = getWidgetBundleInfo(cwd, name);
-        sizeInfo = ` — ${formatBytes(info.raw)}`;
+        sizeInfo = `, ${formatBytes(info.raw)}`;
       } catch {}
       return {
         value: name,
@@ -226,7 +226,7 @@ export async function runPublish(
     });
   } catch (err: any) {
     if (err.status === 409) {
-      s.stop(`${manifest.name}@${version} already published — bump version to republish`);
+      s.stop(`${manifest.name}@${version} already published, bump version to republish`);
       process.exit(0);
     }
     s.stop(`Publish failed: ${err.message}`);
@@ -244,7 +244,7 @@ export async function runPublish(
   if (cssBuffer) {
     if (!publishData.cssUploadUrl) {
       s.stop(
-        `dist/${widgetName}.css exists but the Hub did not return a css upload URL — update the Hub or remove the stylesheet`,
+        `dist/${widgetName}.css exists but the Hub did not return a css upload URL, update the Hub or remove the stylesheet`,
       );
       process.exit(1);
     }

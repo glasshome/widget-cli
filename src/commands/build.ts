@@ -1,6 +1,7 @@
 import { log, spinner } from "@clack/prompts";
 import { buildWidgets } from "@glasshome/widget-sdk/vite";
 import { lintAndReport } from "../utils/lint-source";
+import { withQuietStdout } from "../utils/quiet";
 
 export async function runBuild(cwd: string): Promise<void> {
   const s = spinner();
@@ -9,11 +10,13 @@ export async function runBuild(cwd: string): Promise<void> {
   try {
     const solid = (await import("vite-plugin-solid")).default;
     process.chdir(cwd);
-    await buildWidgets({
-      srcDir: "src",
-      outDir: "dist",
-      plugins: [solid()],
-    });
+    await withQuietStdout(() =>
+      buildWidgets({
+        srcDir: "src",
+        outDir: "dist",
+        plugins: [solid()],
+      }),
+    );
     s.stop("Build complete");
     lintAndReport(cwd);
   } catch (err) {

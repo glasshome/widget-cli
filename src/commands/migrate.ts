@@ -26,7 +26,7 @@ export interface MigrateOptions {
 }
 
 /**
- * `bun widget migrate config` — rewrite widgets' raw-zod config to `defineConfig` +
+ * `bun widget migrate config`, rewrite widgets' raw-zod config to `defineConfig` +
  * `field.*`. Assistive: unmigratable fields stay raw zod and are reported as manual
  * TODOs; validation is never dropped. Use `--dry` to preview without writing.
  */
@@ -73,7 +73,7 @@ export async function runMigrate(
       } else {
         totalTodos += warnings.length;
         log.warn(
-          `${widget}: ${verb} ${rel} — ${warnings.length} field(s) left as raw zod (manual TODO):`,
+          `${widget}: ${verb} ${rel}, ${warnings.length} field(s) left as raw zod (manual TODO):`,
         );
         for (const w of warnings) {
           log.message(`  • ${w.field}: ${w.reason}`);

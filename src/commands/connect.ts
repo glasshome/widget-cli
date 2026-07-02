@@ -1,10 +1,12 @@
 import { existsSync, readdirSync, readFileSync, statSync, watch } from "node:fs";
 import { resolve } from "node:path";
-import { log, spinner } from "@clack/prompts";
+import { log, note, spinner } from "@clack/prompts";
+import color from "picocolors";
 import { buildWidgets } from "@glasshome/widget-sdk/vite";
 import { trpcMutate, trpcQuery } from "../utils/api";
 import { clearHostToken, extractHost, getHostToken, storeHostToken } from "../utils/auth";
 import { lintAndReport } from "../utils/lint-source";
+import { withQuietStdout } from "../utils/quiet";
 
 interface RegistryWidget {
   name: string;
@@ -34,7 +36,7 @@ async function uploadAndRegister(
 
   const bundlePath = resolve(distDir, `${slug}.js`);
   if (!existsSync(bundlePath)) {
-    log.warn(`Bundle not found: ${bundlePath} — skipping ${slug}`);
+    log.warn(`Bundle not found: ${bundlePath}, skipping ${slug}`);
     return;
   }
 
@@ -116,7 +118,7 @@ export async function runConnect(
 ): Promise<void> {
   const distDir = resolve(cwd, "dist");
   const solid = (await import("vite-plugin-solid")).default;
-  // delegateEvents: false — widgets run in closed shadow roots where Solid's
+  // delegateEvents: false, widgets run in closed shadow roots where Solid's
   // document-level event delegation cannot see the target.
   const buildOpts = {
     srcDir: "src",
@@ -130,7 +132,7 @@ export async function runConnect(
   try {
     const origCwd = process.cwd();
     process.chdir(cwd);
-    await buildWidgets(buildOpts);
+    await withQuietStdout(() => buildWidgets(buildOpts));
     process.chdir(origCwd);
   } catch (err) {
     s.stop("Build failed");
@@ -154,7 +156,7 @@ export async function runConnect(
 
   if (opts.reAuth) {
     clearHostToken(host);
-    log.info("Discarded stored credentials (--re-auth).");
+    log.info("Discarded stored credentials (--re-auth)");
   }
 
   // Validate stored token before using it
@@ -168,17 +170,17 @@ export async function runConnect(
         const body = (await check.json()) as { session?: unknown } | null;
         if (body?.session) {
           token = existingToken;
-          log.info("Using stored credentials for dashboard.");
+          log.info("Using stored credentials");
         } else {
           clearHostToken(host);
-          log.warn("Stored credentials expired — re-authenticating.");
+          log.warn("Stored credentials expired, re-authenticating");
         }
       } else {
         clearHostToken(host);
-        log.warn("Stored credentials expired — re-authenticating.");
+        log.warn("Stored credentials expired, re-authenticating");
       }
     } catch {
-      log.warn("Could not validate stored credentials — re-authenticating.");
+      log.warn("Could not validate stored credentials, re-authenticating");
     }
   }
 
@@ -220,7 +222,7 @@ export async function runConnect(
       log.warn(
         `Could not reach dashboard at ${api}: ${err instanceof Error ? err.message : String(err)}`,
       );
-      // token stays empty — caught by guard below
+      // token stays empty, caught by guard below
     }
 
     if (deviceCode!) {
@@ -286,7 +288,7 @@ export async function runConnect(
             s.stop("Device code expired");
             break;
           }
-          // Unexpected error — stop polling
+          // Unexpected error, stop polling
           s.stop(`Auth error: ${errData.error ?? res.status}`);
           break;
         } catch (err) {
@@ -305,7 +307,7 @@ export async function runConnect(
   }
 
   if (!token) {
-    log.warn("Authentication failed — widgets won't be connected. Log in at the dashboard first, then restart.");
+    log.warn("Authentication failed, widgets won't be connected. Log in at the dashboard first, then restart.");
     return;
   }
 
@@ -326,7 +328,7 @@ export async function runConnect(
       });
     }
   } catch {
-    // Non-fatal — dev mode may already be enabled
+    // Non-fatal, dev mode may already be enabled
   }
 
   // Step 5: Upload bundles and register widgets
@@ -360,7 +362,7 @@ export async function runConnect(
       const origCwd = process.cwd();
       process.chdir(cwd);
       try {
-        await buildWidgets({ ...buildOpts, only: widgets });
+        await withQuietStdout(() => buildWidgets({ ...buildOpts, only: widgets }));
       } finally {
         process.chdir(origCwd);
       }
@@ -373,7 +375,7 @@ export async function runConnect(
           await uploadAndRegister(apiUrl, distDir, widget, token);
           log.info(`Rebuilt & uploaded ${widgetName}`);
         } else {
-          log.warn(`No registry entry for ${widgetName} — skipping upload`);
+          log.warn(`No registry entry for ${widgetName}, skipping upload`);
         }
       }
     } catch (err) {
@@ -404,14 +406,19 @@ export async function runConnect(
       ).length
     : 0;
 
-  log.success(`Connected! ${widgetCount} widget(s) are live.`);
-  log.info("Bundles uploaded to API. Widgets registered with local paths.");
-  log.info("File changes auto-rebuild and re-upload. Add widgets with `bun widget add`.");
-  log.info("Press Ctrl+C to disconnect.");
+  log.success(color.green(`Connected: ${widgetCount} widget(s) live`));
+  note(
+    [
+      `${color.cyan("watching")}  src/ (edits auto-rebuild & re-upload)`,
+      `${color.cyan("add")}       new widgets with ${color.bold("bun widget add")}`,
+      `${color.cyan("stop")}      press ${color.bold("Ctrl+C")} to disconnect`,
+    ].join("\n"),
+    "Live testing",
+  );
 
-  // Step 7: Handle SIGINT — unregister and clean up
+  // Step 7: Handle SIGINT, unregister and clean up
   const cleanup = async () => {
-    log.info("\nDisconnecting...");
+    log.info("Disconnecting...");
     if (debounceTimer) clearTimeout(debounceTimer);
     watcher.close();
 
@@ -424,7 +431,7 @@ export async function runConnect(
           input: { scope: "local", name: slug },
         });
       } catch {
-        // Non-fatal — API may be down
+        // Non-fatal, API may be down
       }
     }
     log.info("Widgets unregistered");

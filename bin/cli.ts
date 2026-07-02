@@ -166,7 +166,7 @@ switch (effectiveCommand) {
     const widgetName = args[0];
     const { runInfo } = await import("../src/commands/info");
     await runInfo(resolveWidgetDir(), widgetName);
-    outro("");
+    outro();
     break;
   }
 

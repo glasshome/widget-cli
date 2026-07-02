@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { log, spinner } from "@clack/prompts";
+import { log, note, spinner } from "@clack/prompts";
 import { discoverWidgets, readManifest, writeManifest } from "../utils/manifest";
 import { runValidate } from "./validate";
 
@@ -124,11 +124,14 @@ export async function runUpgrade(cwd: string): Promise<void> {
   } else {
     // Standalone mode: can't fetch from npm (private package), guide user
     log.info("@glasshome/widget-sdk is a workspace package and is not published to npm.");
-    log.info("");
-    log.step("To upgrade:");
-    log.info("  1. Update the @glasshome/widget-sdk version in your package.json peerDependencies");
-    log.info("  2. Run `bun install` to install the new version");
-    log.info("  3. Run `bun widget upgrade` again to sync manifest files");
-    log.info("  4. Run `bun widget validate` to check compatibility");
+    note(
+      [
+        "1. Bump @glasshome/widget-sdk in package.json peerDependencies",
+        "2. bun install",
+        "3. bun widget upgrade   (sync manifest files)",
+        "4. bun widget validate  (check compatibility)",
+      ].join("\n"),
+      "To upgrade",
+    );
   }
 }

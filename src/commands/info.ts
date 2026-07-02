@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { log } from "@clack/prompts";
+import { log, note } from "@clack/prompts";
+import color from "picocolors";
 import {
   discoverWidgets,
   formatBytes,
@@ -18,8 +19,6 @@ export async function runInfo(cwd: string, widgetName?: string): Promise<void> {
   }
 
   const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-  log.info(`Project: ${pkg.name ?? "unknown"}`);
-  log.info(`Version: ${pkg.version ?? "0.0.0"}`);
 
   const widgets = discoverWidgets(cwd);
 
@@ -35,44 +34,40 @@ export async function runInfo(cwd: string, widgetName?: string): Promise<void> {
     process.exit(1);
   }
 
-  log.info(`\nWidgets: ${widgets.length} total`);
+  log.step(
+    `${color.bold(pkg.name ?? "unknown")} ${color.dim(`v${pkg.version ?? "0.0.0"}`)} ${color.dim("·")} ${widgets.length} widget(s)`,
+  );
+
+  // Right-pad labels so values line up inside the note box.
+  const field = (label: string, value: string) => `${color.dim(label.padEnd(9))} ${value}`;
 
   for (const name of toShow) {
-    log.info(`\n--- ${name} ---`);
-
     try {
       const manifest = readManifest(cwd, name);
-      log.info(`  Name:        ${manifest.name}`);
-      log.info(`  Min Size:    ${manifest.minSize.w}×${manifest.minSize.h}`);
-      log.info(`  Max Size:    ${manifest.maxSize.w}×${manifest.maxSize.h}`);
-      if (manifest.defaultSize) {
-        log.info(`  Default:     ${manifest.defaultSize.w}×${manifest.defaultSize.h}`);
-      }
-      log.info(`  SDK Version: ${manifest.sdkVersion}`);
-      if (manifest.version) {
-        log.info(`  Version:     ${manifest.version}`);
-      }
-      if (manifest.description) {
-        log.info(`  Description: ${manifest.description}`);
-      }
+      const lines: string[] = [];
 
-      // Bundle size (if built)
+      const size = (s: { w: number; h: number }) => `${s.w}×${s.h}`;
+      lines.push(field("Size", `${size(manifest.minSize)} → ${size(manifest.maxSize)}`));
+      if (manifest.defaultSize) lines.push(field("Default", size(manifest.defaultSize)));
+      lines.push(field("SDK", manifest.sdkVersion));
+      if (manifest.version) lines.push(field("Version", manifest.version));
+      if (manifest.description) lines.push(field("About", color.dim(manifest.description)));
+
       try {
         const info = getWidgetBundleInfo(cwd, name);
-        log.info(`  Bundle:      ${formatBytes(info.raw)} (${formatBytes(info.gzip)} gzipped)`);
+        lines.push(field("Bundle", `${formatBytes(info.raw)} (${formatBytes(info.gzip)} gzipped)`));
       } catch {
-        log.info("  Bundle:      not built yet");
+        lines.push(field("Bundle", color.dim("not built yet")));
       }
+
+      note(lines.join("\n"), `${manifest.name} ${color.dim(`(${name})`)}`);
     } catch (err) {
-      log.warn(`  Could not read manifest: ${err instanceof Error ? err.message : String(err)}`);
+      log.warn(`${name}: could not read manifest: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  // Registry summary
   const registry = readRegistry(cwd);
   if (registry) {
-    log.info(
-      `\nRegistry: ${registry.widgets.length} widget(s) (generated ${registry.generatedAt})`,
-    );
+    log.info(`Registry: ${registry.widgets.length} widget(s) (generated ${registry.generatedAt})`);
   }
 }
