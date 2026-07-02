@@ -2,6 +2,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { intro, log, outro } from "@clack/prompts";
+import { notifyCliUpdate, notifySdkUpdate } from "../src/utils/version";
 
 function resolveWidgetDir(): string {
   if (explicitDir) {
@@ -94,6 +95,9 @@ if (effectiveCommand === "help") {
 
 intro(`glasshome-widget ${effectiveCommand}`);
 
+// Best-effort, throttled nudge when a newer CLI is on npm. Never blocks.
+await notifyCliUpdate();
+
 switch (effectiveCommand) {
   case "create": {
     const { runCreate } = await import("../src/commands/create");
@@ -110,8 +114,10 @@ switch (effectiveCommand) {
   }
 
   case "build": {
+    const widgetDir = resolveWidgetDir();
+    await notifySdkUpdate(widgetDir);
     const { runBuild } = await import("../src/commands/build");
-    await runBuild(resolveWidgetDir());
+    await runBuild(widgetDir);
     outro("Done");
     break;
   }
@@ -130,8 +136,10 @@ switch (effectiveCommand) {
 
   case "validate": {
     const widgetName = args[0];
+    const widgetDir = resolveWidgetDir();
+    await notifySdkUpdate(widgetDir);
     const { runValidate } = await import("../src/commands/validate");
-    const passed = await runValidate(resolveWidgetDir(), widgetName);
+    const passed = await runValidate(widgetDir, widgetName);
     outro(passed ? "All checks passed" : "Validation failed");
     process.exit(passed ? 0 : 1);
     break;

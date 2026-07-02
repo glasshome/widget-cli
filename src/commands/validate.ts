@@ -6,6 +6,7 @@ import {
   publishManifestSchema,
   requiresCapabilities,
 } from "@glasshome/widget-contract";
+import semver from "semver";
 import {
   discoverWidgets,
   formatBytes,
@@ -14,6 +15,7 @@ import {
   readRegistry,
   type WidgetManifest,
 } from "../utils/manifest";
+import { getProjectSdkVersion } from "../utils/version";
 
 interface ValidationResult {
   passed: boolean;
@@ -155,6 +157,9 @@ export async function runValidate(
 
   const failed: string[] = [];
 
+  // Manifest sdkVersion range must admit the pinned SDK, else it lies about compatibility.
+  const projectSdk = getProjectSdkVersion(cwd);
+
   for (const name of toValidate) {
     if (!quiet) log.step(name);
 
@@ -182,6 +187,19 @@ export async function runValidate(
       for (const warn of result.warnings) {
         log.warn(`  - ${warn}`);
       }
+    }
+
+    if (
+      !quiet &&
+      projectSdk &&
+      manifest.sdkVersion &&
+      manifest.sdkVersion !== "*" &&
+      semver.validRange(manifest.sdkVersion) &&
+      !semver.satisfies(projectSdk, manifest.sdkVersion)
+    ) {
+      log.warn(
+        `  - manifest sdkVersion "${manifest.sdkVersion}" excludes the installed SDK ${projectSdk}; run \`bun widget upgrade\``,
+      );
     }
 
     // Check bundle exists

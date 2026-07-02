@@ -122,8 +122,7 @@ export async function runUpgrade(cwd: string): Promise<void> {
       log.warn(`Synced to ${sdkVersion} but validation has warnings/errors. Check above.`);
     }
   } else {
-    // Standalone mode: can't fetch from npm (private package), guide user
-    log.info("@glasshome/widget-sdk is a workspace package and is not published to npm.");
+    log.info("Not inside the widget workspace. Upgrade @glasshome/widget-sdk manually:");
     note(
       [
         "1. Bump @glasshome/widget-sdk in package.json peerDependencies",

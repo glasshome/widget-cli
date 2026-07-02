@@ -5,6 +5,20 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-07-02
+
+### Added
+
+- Automatic update detection. Every command now nudges when a newer
+  `@glasshome/widget-cli` is published on npm. `build` and `validate` also warn
+  when the project's `@glasshome/widget-sdk` is behind the latest release. The
+  registry is queried at most once per day (cached in
+  `~/.glasshome/update-check.json`); warm runs stay offline. Opt out with the
+  `GLASSHOME_NO_UPDATE_NOTIFIER` or `CI` environment variables.
+- `validate` warns when a widget's `manifest.json` `sdkVersion` range excludes
+  the SDK version pinned in `package.json`, catching manifests that claim the
+  wrong compatibility before publish.
+
 ## [0.7.0] - 2026-07-02
 
 ### Changed
