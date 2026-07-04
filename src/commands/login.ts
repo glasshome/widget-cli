@@ -148,10 +148,19 @@ export async function runLogin(hubUrl?: string): Promise<void> {
     name?: string;
     email?: string;
     sub?: string;
+    username?: string;
   };
   const displayName = userInfo.name || userInfo.email || userInfo.sub || "unknown";
-  const scopeBase = userInfo.name || userInfo.email?.split("@")[0] || userInfo.sub || "unknown";
-  const scope = scopeBase.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  // The hub assigns each account a stable, unique personal scope (its username)
+  // and is the source of truth; publish always re-fetches the live scope list
+  // from /api/widgets/scopes. Prefer that username here so the stored value and
+  // the login message match what the user actually publishes under. Fall back to
+  // local derivation only for older hubs that don't return a username yet.
+  const scope =
+    userInfo.username ||
+    (userInfo.name || userInfo.email?.split("@")[0] || userInfo.sub || "unknown")
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-");
 
   // Store tokens
   storeToken({

@@ -5,7 +5,7 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.0] - 2026-07-02
+## [0.8.0] - 2026-07-05
 
 ### Added
 
@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `validate` warns when a widget's `manifest.json` `sdkVersion` range excludes
   the SDK version pinned in `package.json`, catching manifests that claim the
   wrong compatibility before publish.
+
+### Fixed
+
+- `login` now stores the hub-assigned username as your publish scope when the
+  hub provides one, so the scope shown at login matches what `publish` actually
+  uses. Older hubs that don't return a username fall back to the previous
+  locally-derived scope.
 
 ## [0.7.0] - 2026-07-02
 
