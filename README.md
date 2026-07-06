@@ -1,6 +1,6 @@
 # @glasshome/widget-cli
 
-CLI for creating and managing GlassHome widgets.
+CLI for creating and managing widgets for [GlassHome](https://glasshome.app), the local-first dashboard for Home Assistant. Scaffold, preview, and publish widgets to the GlassHome Hub; see the [widget development guide](https://glasshome.app/docs/widget-development) for the full flow.
 
 ## Install
 
