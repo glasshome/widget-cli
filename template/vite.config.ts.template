@@ -3,5 +3,8 @@ import solid from "vite-plugin-solid";
 import { glasshomeWidgets } from "@glasshome/widget-sdk/vite";
 
 export default defineConfig({
-  plugins: [solid(), ...glasshomeWidgets()],
+  // delegateEvents: false — widgets render inside closed shadow roots where Solid's
+  // document-level event delegation never sees the target, so onClick/onInput handlers
+  // silently do nothing once published. Direct listeners work everywhere.
+  plugins: [solid({ solid: { delegateEvents: false } }), ...glasshomeWidgets()],
 });

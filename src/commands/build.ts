@@ -14,7 +14,9 @@ export async function runBuild(cwd: string): Promise<void> {
       buildWidgets({
         srcDir: "src",
         outDir: "dist",
-        plugins: [solid()],
+        // delegateEvents: false, widgets run in closed shadow roots where Solid's
+        // document-level event delegation cannot see the target. Must match connect.ts.
+        plugins: [solid({ solid: { delegateEvents: false } })],
       }),
     );
     s.stop("Build complete");
