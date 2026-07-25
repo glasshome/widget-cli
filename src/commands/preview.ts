@@ -43,46 +43,55 @@ export async function runPreview(cwd: string, names: string[], isolate: boolean)
     process.exit(1);
   }
 
-  log.success(`Captured ${summary.shots} shot(s) across ${summary.widgets} widget(s)`);
-
-  if (summary.skipped.length) {
-    log.info(`No examples (skipped): ${summary.skipped.join(", ")}`);
-  }
-
-  const network = summary.failures.filter((f) => f.kind === "network");
   const hangs = summary.failures.filter((f) => f.kind === "hang");
   const integrity = summary.failures.filter((f) => f.kind === "integrity");
+  const networkWidgets = [
+    ...new Set(summary.failures.filter((f) => f.kind === "network").map((f) => f.widget)),
+  ];
+  const attempted = summary.shots + hangs.length;
 
-  // Nothing can actually leave — DNS is blackholed. These are blocked attempts,
-  // i.e. what each widget wanted from the network and must degrade without.
-  if (network.length) {
-    log.warn(
-      `NETWORK: ${network.length} blocked request(s) — all denied, none left the machine\n` +
-        network.map((f) => `  ${f.widget}  ${f.detail}`).join("\n"),
-    );
+  // Headline: plain count of what landed in preview/. A miss only matters if a
+  // render could not complete (hangs) or a bundle changed under us (integrity).
+  const out = color.cyan("preview/");
+  if (hangs.length || integrity.length) {
+    log.warn(`Rendered ${summary.shots} of ${attempted} previews into ${out}`);
   } else {
-    log.success("NETWORK: no widget attempted to reach the network");
+    log.success(`Rendered ${summary.shots} previews (light + dark) into ${out}`);
   }
 
+  if (summary.skipped.length) {
+    log.message(color.dim(`No examples to render: ${summary.skipped.join(", ")}`));
+  }
+
+  // Real miss: a render still too slow after one retry. Its slot is left without
+  // a PNG; everything else rendered.
   if (hangs.length) {
-    log.error(
-      `RENDER: ${hangs.length} render(s) failed or timed out\n` +
-        hangs.map((f) => `  ${f.widget}  ${f.detail}`).join("\n"),
+    log.warn(
+      `Too slow to render, even after a retry (no image written):\n` +
+        hangs.map((f) => `  · ${f.widget}  ${f.detail}`).join("\n"),
     );
-  } else {
-    log.success("RENDER: every render settled inside the timeout");
   }
 
+  // Should never happen: a bundle's bytes changed mid-run. This is a real
+  // problem, not a slow render.
   if (integrity.length) {
     log.error(
-      `INTEGRITY: ${integrity.length} widget(s) changed after pinning\n` +
-        integrity.map((f) => `  ${f.widget}  ${f.detail}`).join("\n"),
+      `A bundle changed while rendering (report this):\n` +
+        integrity.map((f) => `  · ${f.widget}`).join("\n"),
     );
-  } else {
-    log.success("INTEGRITY: every bundle matched its pinned hash");
   }
 
-  log.info(`Previews written to ${color.cyan("preview/")}`);
+  // Informational, not a failure: some widgets have no offline data and reach
+  // for the network. The request is blocked and nothing leaves the machine; the
+  // widget renders a placeholder. Expected for camera; worth a glance if another
+  // widget shows up here.
+  if (networkWidgets.length) {
+    log.message(
+      color.dim(
+        `Used a placeholder (no offline data; network blocked, nothing left the machine): ${networkWidgets.join(", ")}`,
+      ),
+    );
+  }
 
   // Vite's dev server leaves live handles behind (file watchers, keep-alive
   // sockets from browsers that crashed mid-render), so the process would sit

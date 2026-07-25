@@ -202,8 +202,8 @@ export async function runPreview(opts: PreviewOptions): Promise<PreviewSummary> 
               for (const a of lock.attempts) widgetAttempts.add(a);
             };
 
-            try {
-              await withRenderTimeout(`${widget} / ${label} / ${theme}`, async () => {
+            const attempt = () =>
+              withRenderTimeout(`${widget} / ${label} / ${theme}`, async () => {
                 if (shared) {
                   const page = await shared.newPage();
                   try {
@@ -220,17 +220,22 @@ export async function runPreview(opts: PreviewOptions): Promise<PreviewSummary> 
                   await withFreshBrowser(shoot);
                 }
               });
-              shot++;
-            } catch (err) {
-              failures.push({
-                widget,
-                kind: "hang",
-                detail: `${label}/${theme}: ${err instanceof Error ? err.message : String(err)}`,
-              });
-              // A timed-out render leaves the browser wedged; drop it so the next
-              // shot starts clean instead of cascading into more timeouts.
-              await shared?.recycle().catch(() => {});
+
+            // Two tries. A render that crosses 30s is usually a heavy widget
+            // flaking under load, not a real failure: recycle (the wedged
+            // browser is why it stalled) and give it one clean retry before
+            // recording a miss.
+            let ok = false;
+            for (let tries = 0; tries < 2 && !ok; tries++) {
+              try {
+                await attempt();
+                ok = true;
+              } catch {
+                await shared?.recycle().catch(() => {});
+              }
             }
+            if (ok) shot++;
+            else failures.push({ widget, kind: "hang", detail: `${label} (${theme})` });
           }
         }
 
