@@ -1,4 +1,4 @@
-import { log, spinner } from "@clack/prompts";
+import { log } from "@clack/prompts";
 import color from "picocolors";
 import { runPreview as capturePreview } from "../preview/capture";
 import { withQuietStdout } from "../utils/quiet";
@@ -21,29 +21,29 @@ export async function runPreview(cwd: string, names: string[], isolate: boolean)
     process.exit(1);
   }
 
-  const s = spinner();
-  s.start("Starting preview...");
+  // Capture the REAL stdout writer before withQuietStdout no-ops
+  // process.stdout.write. A clack spinner writes through that same override and
+  // would freeze inside the quiet block, so progress goes out this bound
+  // reference (which the override cannot intercept) as plain lines. Build/vite
+  // noise stays silenced; only these phase lines get through.
+  const realWrite = process.stdout.write.bind(process.stdout);
+  const progress = (m: string) => {
+    realWrite(`${color.gray("│")}  ${color.dim(m)}\n`);
+  };
+
+  log.info(names.length ? `Previewing ${names.join(", ")}` : "Previewing all widgets");
 
   let summary: Awaited<ReturnType<typeof capturePreview>>;
   try {
-    // Build + vite dev server log to stdout; keep the spinner line clean. The
-    // driver drives the spinner message through onProgress so the full-catalogue
-    // build (minutes, otherwise silent) shows what phase it is in.
     summary = await withQuietStdout(() =>
-      capturePreview({
-        projectDir: cwd,
-        only: names,
-        isolate,
-        onProgress: (m) => s.message(m),
-      }),
+      capturePreview({ projectDir: cwd, only: names, isolate, onProgress: progress }),
     );
   } catch (err) {
-    s.stop("Preview failed");
     log.error(err instanceof Error ? err.message : String(err));
     process.exit(1);
   }
 
-  s.stop(`Captured ${summary.shots} shot(s) across ${summary.widgets} widget(s)`);
+  log.success(`Captured ${summary.shots} shot(s) across ${summary.widgets} widget(s)`);
 
   if (summary.skipped.length) {
     log.info(`No examples (skipped): ${summary.skipped.join(", ")}`);
