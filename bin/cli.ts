@@ -27,6 +27,8 @@ Commands:
   build                  Build all widgets (per-widget, self-contained bundles)
   connect <url>          Connect to a running dashboard for live testing
                          --re-auth discards stored credentials and re-runs device approval
+  preview [name...]      Screenshot widgets' examples (light + dark) into preview/
+                         --isolate gives every render its own browser process
   validate [name]        Validate all widgets or a specific one
   publish [hub-url]      Build and publish a widget to Hub
   login [hub-url]        Authenticate with GlassHome Hub
@@ -42,6 +44,8 @@ Examples:
   glasshome-widget add
   glasshome-widget build
   glasshome-widget connect http://localhost:3333
+  glasshome-widget preview
+  glasshome-widget preview clock
   glasshome-widget validate
   glasshome-widget validate clock
   glasshome-widget info
@@ -65,6 +69,7 @@ const { values: flags, positionals } = parseArgs({
     bump: { type: "string" },
     scope: { type: "string" },
     "re-auth": { type: "boolean" },
+    isolate: { type: "boolean" },
     dry: { type: "boolean" },
     help: { type: "boolean", short: "h" },
   },
@@ -131,6 +136,14 @@ switch (effectiveCommand) {
     }
     const { runConnect } = await import("../src/commands/connect");
     await runConnect(url, resolveWidgetDir(), { reAuth: flags["re-auth"] === true });
+    break;
+  }
+
+  case "preview": {
+    const widgetDir = resolveWidgetDir();
+    await notifySdkUpdate(widgetDir);
+    const { runPreview } = await import("../src/commands/preview");
+    await runPreview(widgetDir, args, flags.isolate === true);
     break;
   }
 

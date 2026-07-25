@@ -8,5 +8,6 @@
     "skipLibCheck": true,
     "types": ["@types/bun"]
   },
-  "include": ["src", "bin"]
+  "include": ["src", "bin"],
+  "exclude": ["src/preview/harness"]
 }

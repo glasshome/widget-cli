@@ -1,6 +1,6 @@
 {
   "name": "@glasshome/widget-cli",
-  "version": "0.8.4",
+  "version": "0.9.0",
   "description": "CLI for creating and managing GlassHome widgets",
   "type": "module",
   "bin": {
@@ -16,18 +16,34 @@
     "template"
   ],
   "devDependencies": {
+    "@iconify/types": "^2.0.0",
     "@types/bun": "latest",
     "@types/semver": "^7.0.0"
   },
   "dependencies": {
     "@clack/prompts": "^1.6.0",
+    "@fontsource-variable/caveat": "^5.2.8",
+    "@fontsource-variable/geist": "^5.2.9",
+    "@fontsource-variable/geist-mono": "^5.2.8",
+    "@glasshome/sync-layer": "0.4.0",
     "@glasshome/widget-contract": "0.2.0",
     "@glasshome/widget-sdk": "1.6.1",
+    "@iconify-json/lucide": "^1.2.0",
+    "@iconify-json/mdi": "^1.2.3",
+    "@tailwindcss/vite": "^4.1.13",
     "open": "^11.0.0",
     "picocolors": "^1.1.1",
     "semver": "^7.6.0",
     "ts-morph": "^28.0.0",
     "vite-plugin-solid": "^2.11.0"
+  },
+  "peerDependencies": {
+    "playwright": "^1.40.0"
+  },
+  "peerDependenciesMeta": {
+    "playwright": {
+      "optional": true
+    }
   },
   "repository": {
     "type": "git",
