@@ -18,7 +18,8 @@
   "devDependencies": {
     "@iconify/types": "^2.0.0",
     "@types/bun": "latest",
-    "@types/semver": "^7.0.0"
+    "@types/semver": "^7.0.0",
+    "playwright": "^1.40.0"
   },
   "dependencies": {
     "@clack/prompts": "^1.6.0",
