@@ -8,6 +8,7 @@ import {
   freezeClock,
   hashWidgetArtifacts,
   settleAnimations,
+  type SharedBrowser,
   watchEgress,
   withFreshBrowser,
   withRenderTimeout,
@@ -161,7 +162,7 @@ export async function runPreview(opts: PreviewOptions): Promise<PreviewSummary> 
     });
 
     // 4. Render every shot under the worker's constraints.
-    const runAll = async (newPage: (() => Promise<import("playwright").Page>) | null) => {
+    const runAll = async (shared: SharedBrowser | null) => {
       let done = 0;
       const total = shotLists.size;
       for (const [widget, examples] of shotLists) {
@@ -203,8 +204,8 @@ export async function runPreview(opts: PreviewOptions): Promise<PreviewSummary> 
 
             try {
               await withRenderTimeout(`${widget} / ${label} / ${theme}`, async () => {
-                if (newPage) {
-                  const page = await newPage();
+                if (shared) {
+                  const page = await shared.newPage();
                   try {
                     await shoot(page);
                   } finally {
@@ -226,6 +227,9 @@ export async function runPreview(opts: PreviewOptions): Promise<PreviewSummary> 
                 kind: "hang",
                 detail: `${label}/${theme}: ${err instanceof Error ? err.message : String(err)}`,
               });
+              // A timed-out render leaves the browser wedged; drop it so the next
+              // shot starts clean instead of cascading into more timeouts.
+              await shared?.recycle().catch(() => {});
             }
           }
         }
@@ -239,7 +243,7 @@ export async function runPreview(opts: PreviewOptions): Promise<PreviewSummary> 
     };
 
     if (isolate) await runAll(null);
-    else await withSharedBrowser((newPage) => runAll(newPage));
+    else await withSharedBrowser((shared) => runAll(shared));
   } finally {
     await server.close().catch(() => {});
     // Temp root is throwaway staging; never leave it in the project tree.

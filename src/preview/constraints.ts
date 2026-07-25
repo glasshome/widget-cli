@@ -147,31 +147,55 @@ function applyNixLdOnce(): void {
 /** Launch one browser and hand out a fresh context (own cache and storage) per
     render. Enough isolation for the egress question, without paying a process
     launch per shot. */
-export async function withSharedBrowser<T>(
-  fn: (newPage: () => Promise<Page>) => Promise<T>,
-): Promise<T> {
+/**
+ * Force a browser dead without hanging. A render that times out abandons its
+ * Playwright op but leaves the browser wedged: a graceful `browser.close()` on
+ * it never returns, so the next shot's recycle hangs on it forever. Race the
+ * graceful close against a short deadline, then SIGKILL the process outright.
+ */
+async function hardClose(browser: Browser): Promise<void> {
+  // `process()` exists at runtime on a launched Chromium but is absent from the
+  // base Browser type; narrow it here rather than at the call site.
+  const proc = (browser as Browser & { process?: () => { kill: (s: string) => void } | null })
+    .process?.();
+  await Promise.race([
+    browser.close().catch(() => {}),
+    new Promise((r) => setTimeout(r, 3_000)),
+  ]);
+  proc?.kill("SIGKILL");
+}
+
+export interface SharedBrowser {
+  newPage: () => Promise<Page>;
+  /** Drop the current browser (hard) and start fresh. Call after any render
+      failure: a timed-out render leaves the browser wedged, and reusing it
+      cascades into a 30s timeout on every following shot. */
+  recycle: () => Promise<void>;
+}
+
+export async function withSharedBrowser<T>(fn: (browser: SharedBrowser) => Promise<T>): Promise<T> {
   applyNixLdOnce();
 
   // Recycle the process every N pages. Each render pulls megabytes of icon data
-  // into a fresh context, and a single long-lived browser died around the
-  // twentieth — after which every later newContext() fails instantly with
-  // "Target page, context or browser has been closed", turning one crash into a
-  // cascade of phantom failures.
+  // into a fresh context, and a single long-lived browser degrades and
+  // eventually wedges; recycling keeps cumulative state bounded.
   const PAGES_PER_BROWSER = 8;
 
   const launch = () => chromium.launch({ args: NO_EGRESS_ARGS });
   let browser = await launch();
   let served = 0;
 
+  const recycle = async (): Promise<void> => {
+    await hardClose(browser);
+    browser = await launch();
+    served = 0;
+  };
+
   const newPage = async (): Promise<Page> => {
-    // Recycle on the counter, but also whenever the browser died on its own —
-    // a crashed process keeps `served` below the limit, so counting alone lets
-    // every later newContext() fail and turns one crash into a run of phantom
-    // failures.
+    // Recycle on the counter or a dead browser. A wedged-but-connected browser
+    // is dropped explicitly by the caller via recycle() after a render failure.
     if (served >= PAGES_PER_BROWSER || !browser.isConnected()) {
-      if (browser.isConnected()) await browser.close();
-      browser = await launch();
-      served = 0;
+      await recycle();
     }
     served++;
     try {
@@ -180,7 +204,7 @@ export async function withSharedBrowser<T>(
     } catch {
       // Lost between the liveness check and the context: relaunch once so the
       // crash costs one render rather than the rest of the pass.
-      browser = await launch();
+      await recycle();
       served = 1;
       const context = await browser.newContext({ deviceScaleFactor: 2 });
       return context.newPage();
@@ -188,9 +212,9 @@ export async function withSharedBrowser<T>(
   };
 
   try {
-    return await fn(newPage);
+    return await fn({ newPage, recycle });
   } finally {
-    await browser.close().catch(() => {});
+    await hardClose(browser);
   }
 }
 
