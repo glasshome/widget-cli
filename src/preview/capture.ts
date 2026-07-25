@@ -38,6 +38,8 @@ export interface PreviewOptions {
   projectDir: string;
   only?: string[];
   isolate?: boolean;
+  /** Phase updates for a caller-owned spinner; build + vite output is silenced. */
+  onProgress?: (message: string) => void;
 }
 
 // Filenames become CDN path segments, so keep them to [a-z0-9-]: an example
@@ -78,6 +80,7 @@ export async function runPreview(opts: PreviewOptions): Promise<PreviewSummary> 
   const projectDir = resolve(opts.projectDir);
   const only = opts.only ?? [];
   const isolate = opts.isolate ?? false;
+  const progress = opts.onProgress ?? (() => {});
 
   const distDir = resolve(projectDir, "dist");
   const outDir = resolve(projectDir, "preview");
@@ -87,6 +90,7 @@ export async function runPreview(opts: PreviewOptions): Promise<PreviewSummary> 
   const tempRoot = resolve(projectDir, ".glasshome-preview");
 
   // 1. Build the widget bundles so authored examples land in dist/<name>.js.
+  progress(only.length ? `Building ${only.join(", ")}...` : "Building widgets...");
   process.chdir(projectDir);
   await buildWidgets({
     srcDir: "src",
@@ -132,6 +136,7 @@ export async function runPreview(opts: PreviewOptions): Promise<PreviewSummary> 
     mkdirSync(outDir, { recursive: true });
 
     // 3. Enumerate each widget's shot list (one locked browser for the whole pass).
+    progress(`Loading ${widgetNames.length} widget(s)...`);
     const pinnedHashes = new Map<string, string>();
     await withFreshBrowser(async (page) => {
       watchEgress(page, origin);
@@ -157,7 +162,10 @@ export async function runPreview(opts: PreviewOptions): Promise<PreviewSummary> 
 
     // 4. Render every shot under the worker's constraints.
     const runAll = async (newPage: (() => Promise<import("playwright").Page>) | null) => {
+      let done = 0;
+      const total = shotLists.size;
       for (const [widget, examples] of shotLists) {
+        progress(`Rendering ${widget} (${++done}/${total})...`);
         const widgetAttempts = new Set<string>();
 
         // Verify-before-execute: refuse to render bytes that changed since the

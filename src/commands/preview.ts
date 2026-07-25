@@ -22,13 +22,20 @@ export async function runPreview(cwd: string, names: string[], isolate: boolean)
   }
 
   const s = spinner();
-  s.start(names.length ? `Rendering previews for ${names.join(", ")}...` : "Rendering widget previews...");
+  s.start("Starting preview...");
 
   let summary: Awaited<ReturnType<typeof capturePreview>>;
   try {
-    // Build + vite dev server log to stdout; keep the spinner line clean.
+    // Build + vite dev server log to stdout; keep the spinner line clean. The
+    // driver drives the spinner message through onProgress so the full-catalogue
+    // build (minutes, otherwise silent) shows what phase it is in.
     summary = await withQuietStdout(() =>
-      capturePreview({ projectDir: cwd, only: names, isolate }),
+      capturePreview({
+        projectDir: cwd,
+        only: names,
+        isolate,
+        onProgress: (m) => s.message(m),
+      }),
     );
   } catch (err) {
     s.stop("Preview failed");
