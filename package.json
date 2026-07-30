@@ -28,7 +28,7 @@
     "@fontsource-variable/geist-mono": "^5.2.8",
     "@glasshome/sync-layer": "0.4.0",
     "@glasshome/widget-contract": "0.2.0",
-    "@glasshome/widget-sdk": "1.7.0",
+    "@glasshome/widget-sdk": "1.8.1",
     "@iconify-json/lucide": "^1.2.0",
     "@iconify-json/mdi": "^1.2.3",
     "@tailwindcss/vite": "^4.1.13",
