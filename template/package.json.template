@@ -7,13 +7,14 @@
     "dist"
   ],
   "scripts": {
-    "build": "vite build",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
     "dev": "vite build --watch",
     "widget": "glasshome-widget"
   },
   "peerDependencies": {
     "solid-js": "^1.9.11",
-    "@glasshome/widget-sdk": "^0.2.0"
+    "@glasshome/widget-sdk": "SDK_RANGE"
   },
   "devDependencies": {
     "@glasshome/widget-cli": "CLI_VERSION",

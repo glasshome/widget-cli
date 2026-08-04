@@ -11,6 +11,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { cancel, confirm, isCancel, log, note, spinner, text } from "@clack/prompts";
 import color from "picocolors";
+import { defaultSdkRange, FALLBACK_SDK_RANGE } from "../utils/sdk-version";
 import { getCliVersion } from "../utils/version";
 import { promptWidgetDetails, scaffoldWidget } from "./add";
 
@@ -125,6 +126,9 @@ export async function runCreate() {
     pkgContent = pkgContent.replace(/PROJECT_NAME/g, projectName as string);
     pkgContent = pkgContent.replace(/PROJECT_DESCRIPTION/g, projectDesc);
     pkgContent = pkgContent.replace(/CLI_VERSION/g, `^${getCliVersion()}`);
+    // Nothing is installed yet, so this comes from the SDK the CLI ships
+    // against. `bun widget upgrade` re-syncs it and every manifest later.
+    pkgContent = pkgContent.replace(/SDK_RANGE/g, defaultSdkRange() ?? FALLBACK_SDK_RANGE);
     writeFileSync(pkgPath, pkgContent);
 
     // Replace project-level placeholders in README.md

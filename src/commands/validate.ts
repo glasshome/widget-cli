@@ -5,6 +5,7 @@ import {
   formatSchemaError,
   publishManifestSchema,
   requiresCapabilities,
+  satisfiesSdk,
 } from "@glasshome/widget-contract";
 import semver from "semver";
 import {
@@ -15,7 +16,7 @@ import {
   readRegistry,
   type WidgetManifest,
 } from "../utils/manifest";
-import { getProjectSdkVersion } from "../utils/version";
+import { getInstalledSdkVersion } from "../utils/sdk-version";
 
 interface ValidationResult {
   passed: boolean;
@@ -23,7 +24,7 @@ interface ValidationResult {
   warnings: string[];
 }
 
-function validateManifest(manifest: WidgetManifest): ValidationResult {
+function validateManifest(manifest: WidgetManifest, installedSdk: string | null): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
   const hasValidMinSize =
@@ -45,6 +46,23 @@ function validateManifest(manifest: WidgetManifest): ValidationResult {
         `sdkVersion "${manifest.sdkVersion}" only admits SDK >= 1.0.0, so manifest.json must declare "capabilities", use [] if the widget never reads or controls Home Assistant`,
       );
     }
+  }
+
+  // The range must admit the SDK actually resolved in node_modules. Comparing
+  // it against the range declared in package.json only compares a claim with
+  // itself: both said "^0.2.0" while the build ran on 1.7.0, and it passed.
+  // An error, not a warning: a pre-1.0 range also excuses the widget from
+  // declaring capabilities, so a stale one silently leaves the 1.x contract.
+  if (
+    installedSdk &&
+    manifest.sdkVersion &&
+    manifest.sdkVersion !== "*" &&
+    semver.validRange(manifest.sdkVersion) &&
+    !satisfiesSdk(installedSdk, manifest.sdkVersion)
+  ) {
+    errors.push(
+      `sdkVersion "${manifest.sdkVersion}" excludes the installed SDK ${installedSdk}, so it claims a compatibility it was not built for; run \`bun widget upgrade\``,
+    );
   }
 
   // INS-05: "*" sdkVersion is rejected at publish time, authors must declare
@@ -157,8 +175,7 @@ export async function runValidate(
 
   const failed: string[] = [];
 
-  // Manifest sdkVersion range must admit the pinned SDK, else it lies about compatibility.
-  const projectSdk = getProjectSdkVersion(cwd);
+  const installedSdk = getInstalledSdkVersion(cwd);
 
   for (const name of toValidate) {
     if (!quiet) log.step(name);
@@ -175,7 +192,7 @@ export async function runValidate(
       continue;
     }
 
-    const result = validateManifest(manifest);
+    const result = validateManifest(manifest, installedSdk);
 
     if (result.errors.length > 0) {
       for (const err of result.errors) {
@@ -187,19 +204,6 @@ export async function runValidate(
       for (const warn of result.warnings) {
         log.warn(`  - ${warn}`);
       }
-    }
-
-    if (
-      !quiet &&
-      projectSdk &&
-      manifest.sdkVersion &&
-      manifest.sdkVersion !== "*" &&
-      semver.validRange(manifest.sdkVersion) &&
-      !semver.satisfies(projectSdk, manifest.sdkVersion)
-    ) {
-      log.warn(
-        `  - manifest sdkVersion "${manifest.sdkVersion}" excludes the installed SDK ${projectSdk}; run \`bun widget upgrade\``,
-      );
     }
 
     // Check bundle exists

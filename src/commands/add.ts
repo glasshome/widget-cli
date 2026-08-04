@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { cancel, isCancel, log, text } from "@clack/prompts";
+import { defaultSdkRange, FALLBACK_SDK_RANGE } from "../utils/sdk-version";
 
 /** Capitalize kebab-case into PascalCase for component names. */
 function capitalize(str: string): string {
@@ -30,20 +31,30 @@ export function scaffoldWidget(
   const displayName = capitalize(widgetName);
   const widgetDescription = description || `A GlassHome dashboard widget: ${widgetName}`;
 
+  // The range the host checks before mounting, derived from the SDK this
+  // project actually builds against. Hardcoding it produced widgets that
+  // declared a 0.2-era range while running on 1.x, which reads as "pre-1.0" to
+  // `requiresCapabilities` and quietly excused them from declaring capabilities.
+  const sdkRange = defaultSdkRange(cwd) ?? FALLBACK_SDK_RANGE;
+
   // Read index.tsx template from the template directory
   const templateDir = resolve(import.meta.dir, "../../template");
   let srcContent = readFileSync(resolve(templateDir, "src/index.tsx.template"), "utf-8");
   srcContent = srcContent.replace(/WIDGET_NAME/g, displayName);
+  srcContent = srcContent.replace(/SDK_RANGE/g, sdkRange);
   writeFileSync(resolve(widgetDir, "index.tsx"), srcContent);
 
-  // Generate manifest.json
+  // Generate manifest.json. `capabilities` is required for any SDK >= 1.0.0
+  // range and an empty array is the honest default: a fresh widget reads
+  // nothing from Home Assistant, and the declaration is what consent shows.
   const manifest = {
     name: displayName,
     description: widgetDescription,
     minSize: { w: 1, h: 1 },
     maxSize: { w: 4, h: 4 },
     defaultSize: { w: 2, h: 2 },
-    sdkVersion: "^0.2.0",
+    sdkVersion: sdkRange,
+    capabilities: [],
     version: "0.1.0",
   };
   writeFileSync(resolve(widgetDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);

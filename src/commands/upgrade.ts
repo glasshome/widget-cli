@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { log, note, spinner } from "@clack/prompts";
 import { discoverWidgets, readManifest, writeManifest } from "../utils/manifest";
+import { getInstalledSdkVersion } from "../utils/sdk-version";
 import { runValidate } from "./validate";
 
 /** Walk up from cwd looking for a package.json with a `workspaces` field. */
@@ -121,16 +122,30 @@ export async function runUpgrade(cwd: string): Promise<void> {
     } else {
       log.warn(`Synced to ${sdkVersion} but validation has warnings/errors. Check above.`);
     }
-  } else {
-    log.info("Not inside the widget workspace. Upgrade @glasshome/widget-sdk manually:");
-    note(
-      [
-        "1. Bump @glasshome/widget-sdk in package.json peerDependencies",
-        "2. bun install",
-        "3. bun widget upgrade   (sync manifest files)",
-        "4. bun widget validate  (check compatibility)",
-      ].join("\n"),
-      "To upgrade",
-    );
+    return;
   }
+
+  // Standalone project. Bumping the dependency is still the author's call, but
+  // syncing the manifests to whatever is installed is not: a manifest range
+  // that excludes the installed SDK fails validation, and this is the command
+  // that error tells people to run.
+  const installed = getInstalledSdkVersion(cwd);
+  if (installed) {
+    syncManifestSdkVersions(cwd, installed);
+    const valid = await runValidate(cwd);
+    if (!valid) log.warn(`Synced manifests to ${installed}, but validation found problems above.`);
+  } else {
+    log.warn("No @glasshome/widget-sdk installed here, so manifests were left alone.");
+  }
+
+  log.info("To move to a different SDK version:");
+  note(
+    [
+      "1. Bump @glasshome/widget-sdk in package.json peerDependencies",
+      "2. bun install",
+      "3. bun widget upgrade   (sync manifest files)",
+      "4. bun widget validate  (check compatibility)",
+    ].join("\n"),
+    "To upgrade",
+  );
 }
