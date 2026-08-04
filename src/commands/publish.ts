@@ -12,6 +12,7 @@ import {
   readManifest,
   writeManifest,
 } from "../utils/manifest";
+import { typecheckAndReport } from "../utils/typecheck";
 import { enforceCliVersion } from "../utils/version";
 import { runLogin } from "./login";
 
@@ -167,7 +168,17 @@ export async function runPublish(
     writeManifest(cwd, widgetName, manifest);
   }
 
-  // Step 6: Build (async so spinner animates)
+  // Step 6: Typecheck, then build (async so spinner animates).
+  //
+  // Checked here rather than left to the project's own build script: a project
+  // scaffolded before the template ran tsc builds with a bare `vite build`, and
+  // publishing is the irreversible step. A project whose build already
+  // typechecks just pays it twice, which is cheap next to a bad publish.
+  s.start("Checking types...");
+  const typesOk = typecheckAndReport(cwd);
+  s.stop(typesOk ? "Types checked" : "Typecheck failed");
+  if (!typesOk) process.exit(1);
+
   s.start("Building widget...");
   const buildProc = Bun.spawn(["bun", "run", "build"], { cwd, stdout: "pipe", stderr: "pipe" });
   const buildExit = await buildProc.exited;

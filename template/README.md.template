@@ -18,7 +18,12 @@ bun install
 bun run build
 ```
 
-This produces `dist/{widget}.js` for each widget and generates `dist/registry.json`.
+This typechecks the project, produces `dist/{widget}.js` for each widget and
+generates `dist/registry.json`. To check types on their own:
+
+```bash
+bun run typecheck
+```
 
 ## Adding widgets
 

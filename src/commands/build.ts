@@ -2,8 +2,15 @@ import { log, spinner } from "@clack/prompts";
 import { buildWidgets } from "@glasshome/widget-sdk/vite";
 import { lintAndReport } from "../utils/lint-source";
 import { withQuietStdout } from "../utils/quiet";
+import { typecheckAndReport } from "../utils/typecheck";
 
 export async function runBuild(cwd: string): Promise<void> {
+  const check = spinner();
+  check.start("Checking types...");
+  const typesOk = typecheckAndReport(cwd);
+  check.stop(typesOk ? "Types checked" : "Typecheck failed");
+  if (!typesOk) process.exit(1);
+
   const s = spinner();
   s.start("Building widgets...");
 
