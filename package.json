@@ -8,6 +8,7 @@
   },
   "scripts": {
     "cli": "bun bin/cli.ts",
+    "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "files": [
@@ -19,7 +20,8 @@
     "@iconify/types": "^2.0.0",
     "@types/bun": "latest",
     "@types/semver": "^7.0.0",
-    "playwright": "^1.40.0"
+    "playwright": "^1.40.0",
+    "typescript": "^5"
   },
   "dependencies": {
     "@clack/prompts": "^1.6.0",
