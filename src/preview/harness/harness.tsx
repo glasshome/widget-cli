@@ -85,7 +85,13 @@ async function loadWidget(name: string): Promise<{ def: WidgetDefinition; css: s
 // Grid geometry mirrored from the dash route (rowHeight 70, margin 16, lg 12
 // cols at a 1024px reference container). A preview approximates one dashboard
 // width rather than mirroring every breakpoint.
-const CONTAINER = 1024;
+// max-w-7xl (1280px) minus the route's px-3 padding, i.e. the width the grid
+// actually gets on a desktop dashboard. NOT the lg breakpoint's 1024 minimum:
+// that is the narrowest a desktop can be, and using it rendered every
+// size-responsive widget one tier below what users see (energy-flow never
+// reached its node-graph tier, so the storefront advertised the compact
+// layout).
+const CONTAINER = 1256;
 const COLS = 12;
 const GAP = 16;
 const ROW_H = 70;
