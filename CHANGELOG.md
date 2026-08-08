@@ -5,7 +5,17 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.10.0] - 2026-08-08
+
+### Added
+
+- `build` and `publish` typecheck the project first and stop on a type error.
+  Scaffolded projects built with a bare `vite build`, which strips types without
+  checking them, so a widget could bundle and publish with its config type and
+  its `configSchema` disagreeing. New projects also get a `typecheck` script and
+  a `build` that runs `tsc --noEmit` first. A project with no `tsconfig.json`,
+  or with no typescript installed, is not blocked: it warns that types were not
+  checked and carries on.
 
 ### Fixed
 
@@ -24,24 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `upgrade` syncs manifest `sdkVersion` in standalone projects, not only inside
   the widget workspace. It is the command the new error points to, so it had to
   work outside a monorepo.
-
-### Added
-
-- `build` and `publish` typecheck the project first and stop on a type error.
-  Scaffolded projects built with a bare `vite build`, which strips types without
-  checking them, so a widget could bundle and publish with its config type and
-  its `configSchema` disagreeing. New projects also get a `typecheck` script and
-  a `build` that runs `tsc --noEmit` first. A project with no `tsconfig.json`,
-  or with no typescript installed, is not blocked: it warns that types were not
-  checked and carries on.
-
-### Fixed
-
 - `preview` retries a shot that timed out once on a fresh browser before
   recording a miss. Slow renders under full-run load are flaky, not broken;
   the retry clears the intermittent single-shot failure.
 - The `preview` run summary is readable: a healthy run no longer reads as a
   wall of errors.
+- The `preview` harness no longer passes `isEditMode`, a field the SDK removed
+  from `ReactiveWidgetContext`.
 
 ### Changed
 
