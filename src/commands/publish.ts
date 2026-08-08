@@ -29,13 +29,7 @@ export async function runPublish(
 ): Promise<void> {
   const s = spinner();
 
-  // Step 1: Validate (quiet)
   const { runValidate } = await import("./validate");
-  const valid = await runValidate(cwd, undefined, { quiet: true });
-  if (!valid) {
-    log.error("Fix validation errors before publishing.");
-    process.exit(1);
-  }
 
   // Step 2: Authenticate
   const hubUrl = hubUrlOverride ?? getHubUrl();
@@ -189,6 +183,15 @@ export async function runPublish(
     process.exit(1);
   }
   s.stop("Build complete");
+
+  // Validate AFTER the build, not before: the build is what produces the
+  // manifest and bundle that get published, so validating beforehand checks a
+  // different document than the one that ships.
+  const valid = await runValidate(cwd, undefined, { quiet: true });
+  if (!valid) {
+    log.error("Fix validation errors before publishing.");
+    process.exit(1);
+  }
 
   // Step 7: Publish
   const distPath = resolve(cwd, "dist", `${widgetName}.js`);
