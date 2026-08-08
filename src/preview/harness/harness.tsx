@@ -155,7 +155,6 @@ async function main(): Promise<void> {
   stage.style.height = `${height}px`;
 
   const ctx: ReactiveWidgetContext = {
-    isEditMode: () => false,
     updateConfig: () => {},
     dimensions: () => ({ width, height }),
   };
