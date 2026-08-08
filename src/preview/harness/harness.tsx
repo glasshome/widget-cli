@@ -98,11 +98,26 @@ function tilePx(size: { w: number; h: number }): { width: number; height: number
   };
 }
 
+/* The shell composites `--glass-frost` as its bottom background layer and
+   defaults it to `none`, because in the app a live backdrop-filter blurs the
+   dashboard wallpaper behind the widget. A preview is shot alone on a
+   transparent page, so there is nothing to blur and the widget would render
+   with no surface at all: legible by luck in light mode, white-on-nothing in
+   dark. ui registers --glass-frost with `inherits: false`, so it cannot be
+   handed down from the host and has to be set on the shell element itself,
+   which is what dash's performant-blur override sheet does too.
+
+   `--card` is an ordinary inheriting theme token, so it crosses the shadow
+   boundary and follows the `dark` class already mirrored onto the host. */
+const FROST_SHEET = new CSSStyleSheet();
+FROST_SHEET.replaceSync(
+  ".glasshome-widget { --glass-frost: linear-gradient(var(--card), var(--card)); }",
+);
+
 /** Mount via the shared SDK recipe (`@glasshome/widget-sdk/host`): closed shadow
     root, injected tokens, adopted widget CSS, WidgetCtx provider, `dark`
-    mirrored onto the host. No perf-blur/a11y override sheet — not needed for a
-    static shot, so no `extraSheets`; `dark` is the default `mirrorClasses`. The
-    `dark` document class is toggled by the caller before this runs. */
+    mirrored onto the host. `dark` is the default `mirrorClasses`; the `dark`
+    document class is toggled by the caller before this runs. */
 function mount(
   host: HTMLElement,
   def: WidgetDefinition,
@@ -115,6 +130,7 @@ function mount(
     config: () => config,
     ctx,
     cssText,
+    extraSheets: [FROST_SHEET],
     onCrash: (err) => console.error("[harness] widget threw:", err),
   });
 }
