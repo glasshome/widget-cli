@@ -5,6 +5,19 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] - 2026-08-10
+
+### Fixed
+
+- `preview` renders at a real dashboard width instead of the breakpoint minimum,
+  so a shot matches what the widget looks like on a dashboard.
+- The preview shell has a surface to paint on, so transparent widgets no longer
+  render against nothing.
+
+### Changed
+
+- Bumped `@glasshome/widget-sdk` to 1.9.2 and `@glasshome/sync-layer` to 0.6.0.
+
 ## [0.10.1] - 2026-08-08
 
 ### Changed
