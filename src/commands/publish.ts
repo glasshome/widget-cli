@@ -193,6 +193,10 @@ export async function runPublish(
     process.exit(1);
   }
 
+  // Re-read after the build: it rewrites the bundle-owned manifest keys, and
+  // serializing the pre-build object would ship them one publish behind.
+  const builtManifest = readManifest(cwd, widgetName);
+
   // Step 7: Publish
   const distPath = resolve(cwd, "dist", `${widgetName}.js`);
 
@@ -217,37 +221,37 @@ export async function runPublish(
     ? createHash("sha256").update(cssBuffer).digest("hex")
     : undefined;
 
-  s.start(`Publishing ${manifest.name}@${version}...`);
+  s.start(`Publishing ${builtManifest.name}@${version}...`);
 
   let publishData: Awaited<ReturnType<typeof requestPublish>>;
   try {
     publishData = await requestPublish(hubUrl, token!, {
       scope,
       name: widgetName,
-      displayName: manifest.name,
-      description: manifest.description,
-      icon: manifest.icon,
-      minSize: manifest.minSize,
-      maxSize: manifest.maxSize,
-      sdkVersion: manifest.sdkVersion,
+      displayName: builtManifest.name,
+      description: builtManifest.description,
+      icon: builtManifest.icon,
+      minSize: builtManifest.minSize,
+      maxSize: builtManifest.maxSize,
+      sdkVersion: builtManifest.sdkVersion,
       version,
       bundleSize: bundleBuffer.byteLength,
       sha256Hash,
       ...(cssBuffer && cssSha256Hash
         ? { cssSize: cssBuffer.byteLength, cssSha256Hash }
         : {}),
-      manifestJson: JSON.stringify(manifest),
+      manifestJson: JSON.stringify(builtManifest),
     });
   } catch (err: any) {
     if (err.status === 409) {
-      s.stop(`${manifest.name}@${version} already published, bump version to republish`);
+      s.stop(`${builtManifest.name}@${version} already published, bump version to republish`);
       process.exit(0);
     }
     s.stop(`Publish failed: ${err.message}`);
     process.exit(1);
   }
 
-  s.message(`Uploading ${manifest.name} to CDN...`);
+  s.message(`Uploading ${builtManifest.name} to CDN...`);
   try {
     await uploadToR2(publishData.uploadUrl, bundleBuffer);
   } catch (err: any) {
@@ -262,7 +266,7 @@ export async function runPublish(
       );
       process.exit(1);
     }
-    s.message(`Uploading ${manifest.name} styles to CDN...`);
+    s.message(`Uploading ${builtManifest.name} styles to CDN...`);
     try {
       await uploadToR2(publishData.cssUploadUrl, cssBuffer, "text/css");
     } catch (err: any) {
@@ -271,10 +275,10 @@ export async function runPublish(
     }
   }
 
-  s.message(`Confirming ${manifest.name}...`);
+  s.message(`Confirming ${builtManifest.name}...`);
   try {
     const result = await confirmPublish(hubUrl, token!, publishData.versionId);
-    s.stop(`Published ${manifest.name}@${version}`);
+    s.stop(`Published ${builtManifest.name}@${version}`);
     log.info(`CDN: ${result.bundleUrl}`);
     if (result.cssUrl) log.info(`CSS: ${result.cssUrl}`);
   } catch (err: any) {
