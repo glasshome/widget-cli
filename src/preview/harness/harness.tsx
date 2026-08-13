@@ -1,7 +1,6 @@
 import type { ReactiveWidgetContext, WidgetDefinition } from "@glasshome/widget-sdk";
 import { instantiateWidget } from "@glasshome/widget-sdk/host";
-import { loadDemoData } from "@glasshome/sync-layer";
-import { getEntityView } from "@glasshome/sync-layer";
+import { claimHostApi, getEntityView } from "@glasshome/sync-layer";
 import { byDomain, useAreas, useEntities } from "@glasshome/sync-layer/solid";
 import type { EntityDataAdapter } from "@glasshome/ui/solid";
 import { provideEntityData } from "@glasshome/ui/solid";
@@ -166,7 +165,11 @@ async function main(): Promise<void> {
   // triggers the (now dead) network lookup and renders blank.
   await preloadIcons();
 
-  await loadDemoData();
+  // The harness is a host: claim the privileged surface once at boot
+  // (sync-layer keeps demo control off the widget-reachable entry).
+  const hostApi = claimHostApi();
+  if (!hostApi) throw new Error("harness: host API already claimed");
+  await hostApi.loadDemoData();
 
   // Background and padding are the renderer's job: the preview is the widget
   // alone, tight and transparent (omitBackground on capture).
