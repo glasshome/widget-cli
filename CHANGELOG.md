@@ -5,6 +5,19 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.3] - 2026-08-14
+
+### Fixed
+
+- `publish` sends the manifest written by the build it just ran, not the
+  pre-build read, so bundle-owned keys no longer ship one publish behind.
+- The preview harness claims the sync-layer host API at boot, keeping `preview`
+  working now that sync-layer keeps demo data off the widget-reachable entry.
+
+### Changed
+
+- Bumped `@glasshome/widget-sdk` to 1.10.0 and `@glasshome/sync-layer` to 0.7.0.
+
 ## [0.10.2] - 2026-08-10
 
 ### Fixed
