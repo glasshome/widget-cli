@@ -33,7 +33,7 @@ Commands:
   publish [hub-url]      Build and publish a widget to Hub
   login [hub-url]        Authenticate with GlassHome Hub
   info [name]            Show widget metadata and bundle info
-  upgrade                Upgrade @glasshome/widget-sdk to latest version
+  upgrade                Upgrade @glasshome/widget-sdk (latest, or --to <version>) and sync manifests
   migrate config         Rewrite widgets' raw-zod config to defineConfig + field.*
                          --name <widget> targets one; --dry previews without writing
   help                   Show this help message
@@ -56,6 +56,7 @@ Examples:
   glasshome-widget login
   glasshome-widget login https://my-hub.example.com
   glasshome-widget upgrade
+  glasshome-widget upgrade --to 1.10.3
   glasshome-widget publish --dir packages/widgets
 `.trim();
 
@@ -68,6 +69,7 @@ const { values: flags, positionals } = parseArgs({
     name: { type: "string" },
     bump: { type: "string" },
     scope: { type: "string" },
+    to: { type: "string" },
     "re-auth": { type: "boolean" },
     isolate: { type: "boolean" },
     dry: { type: "boolean" },
@@ -193,7 +195,7 @@ switch (effectiveCommand) {
 
   case "upgrade": {
     const { runUpgrade } = await import("../src/commands/upgrade");
-    await runUpgrade(resolveWidgetDir());
+    await runUpgrade(resolveWidgetDir(), { to: str(flags.to) });
     outro("Done");
     break;
   }

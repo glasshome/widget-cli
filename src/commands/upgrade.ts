@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { log, note, spinner } from "@clack/prompts";
+import { log, spinner } from "@clack/prompts";
 import { discoverWidgets, readManifest, writeManifest } from "../utils/manifest";
 import { getInstalledSdkVersion } from "../utils/sdk-version";
 import { runValidate } from "./validate";
@@ -58,20 +58,60 @@ function syncManifestSdkVersions(cwd: string, newVersion: string): void {
   log.info(`Updated sdkVersion to ${sdkRange} in ${widgets.length} manifest(s)`);
 }
 
-export async function runUpgrade(cwd: string): Promise<void> {
+const SDK_PKG = "@glasshome/widget-sdk";
+
+type DependencySection = "peerDependencies" | "devDependencies" | "dependencies";
+type PackageManifest = Partial<Record<DependencySection, Record<string, string>>>;
+
+const SECTION_FLAG: Record<DependencySection, string[]> = {
+  peerDependencies: ["--peer"],
+  devDependencies: ["--dev"],
+  dependencies: [],
+};
+
+/** Which section declares the SDK, so the bump lands where the author put it. */
+export function sdkDependencySection(pkg: PackageManifest): DependencySection | null {
+  const sections: DependencySection[] = ["peerDependencies", "devDependencies", "dependencies"];
+  return sections.find((section) => pkg[section]?.[SDK_PKG] !== undefined) ?? null;
+}
+
+/**
+ * Standalone project: `bun add` the SDK at the requested version (default
+ * latest) into the section that already declares it. Bun installs the SDK's
+ * required peers alongside, so @glasshome/ui follows without a second step.
+ */
+function bumpSdkDependency(cwd: string, section: DependencySection, target: string): boolean {
+  const s = spinner();
+  s.start(`Installing ${SDK_PKG}@${target}...`);
+  const proc = Bun.spawnSync(["bun", "add", ...SECTION_FLAG[section], `${SDK_PKG}@${target}`], {
+    cwd,
+  });
+  if (proc.exitCode !== 0) {
+    s.stop("Install failed");
+    log.error(proc.stderr.toString());
+    return false;
+  }
+  s.stop(`Installed ${SDK_PKG}@${target}`);
+  return true;
+}
+
+export interface UpgradeOptions {
+  /** Version or dist-tag to move to in a standalone project. Default "latest". */
+  to?: string;
+}
+
+export async function runUpgrade(cwd: string, options: UpgradeOptions = {}): Promise<void> {
   const pkgPath = resolve(cwd, "package.json");
   if (!existsSync(pkgPath)) {
     log.error("No package.json found in current directory.");
     process.exit(1);
   }
 
-  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-  const currentVersion =
-    pkg.peerDependencies?.["@glasshome/widget-sdk"] ??
-    pkg.devDependencies?.["@glasshome/widget-sdk"] ??
-    pkg.dependencies?.["@glasshome/widget-sdk"];
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as PackageManifest;
+  const section = sdkDependencySection(pkg);
+  const currentVersion = section ? pkg[section]?.[SDK_PKG] : undefined;
 
-  if (!currentVersion) {
+  if (!section || !currentVersion) {
     log.error("@glasshome/widget-sdk is not listed in dependencies or peerDependencies.");
     process.exit(1);
   }
@@ -125,27 +165,21 @@ export async function runUpgrade(cwd: string): Promise<void> {
     return;
   }
 
-  // Standalone project. Bumping the dependency is still the author's call, but
-  // syncing the manifests to whatever is installed is not: a manifest range
-  // that excludes the installed SDK fails validation, and this is the command
-  // that error tells people to run.
-  const installed = getInstalledSdkVersion(cwd);
-  if (installed) {
-    syncManifestSdkVersions(cwd, installed);
-    const valid = await runValidate(cwd);
-    if (!valid) log.warn(`Synced manifests to ${installed}, but validation found problems above.`);
-  } else {
-    log.warn("No @glasshome/widget-sdk installed here, so manifests were left alone.");
-  }
+  // Standalone project: bump the dependency, then sync every manifest to what
+  // is now installed. A manifest range that excludes the installed SDK fails
+  // validation, and this is the command that error tells people to run.
+  if (!bumpSdkDependency(cwd, section, options.to ?? "latest")) process.exit(1);
 
-  log.info("To move to a different SDK version:");
-  note(
-    [
-      "1. Bump @glasshome/widget-sdk in package.json peerDependencies",
-      "2. bun install",
-      "3. bun widget upgrade   (sync manifest files)",
-      "4. bun widget validate  (check compatibility)",
-    ].join("\n"),
-    "To upgrade",
-  );
+  const installed = getInstalledSdkVersion(cwd);
+  if (!installed) {
+    log.warn("No @glasshome/widget-sdk installed here, so manifests were left alone.");
+    return;
+  }
+  syncManifestSdkVersions(cwd, installed);
+  const valid = await runValidate(cwd);
+  if (valid) {
+    log.success(`Upgraded to @glasshome/widget-sdk@${installed}`);
+  } else {
+    log.warn(`Upgraded to ${installed}, but validation found problems above.`);
+  }
 }
