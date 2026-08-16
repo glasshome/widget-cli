@@ -5,6 +5,13 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.6] - 2026-08-16
+
+### Changed
+
+- Bumped `@glasshome/widget-sdk` to 1.10.3, so `create` scaffolds against an SDK
+  that builds on Windows and installs `@glasshome/ui` on its own.
+
 ## [0.10.4] - 2026-08-14
 
 ### Changed
