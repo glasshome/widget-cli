@@ -5,6 +5,15 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-08-16
+
+### Changed
+
+- `upgrade` in a standalone project now upgrades: it `bun add`s
+  `@glasshome/widget-sdk` at `latest` (or `--to <version>`) into the section
+  that already declares it, then syncs every manifest's `sdkVersion` and runs
+  `validate`. It used to only sync manifests and print the manual steps.
+
 ## [0.10.6] - 2026-08-16
 
 ### Changed
