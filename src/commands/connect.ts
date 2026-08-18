@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync, watch } from "node:fs"
 import { resolve } from "node:path";
 import { log, note, spinner } from "@clack/prompts";
 import color from "picocolors";
-import { buildWidgets } from "@glasshome/widget-sdk/vite";
+import { buildWidgets, createIntrospectSession } from "@glasshome/widget-sdk/vite";
 import { trpcMutate, trpcQuery } from "../utils/api";
 import { clearHostToken, extractHost, getHostToken, storeHostToken } from "../utils/auth";
 import { lintAndReport } from "../utils/lint-source";
@@ -348,6 +348,9 @@ export async function runConnect(
   const pending = new Set<string>();
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let buildInFlight = false;
+  // One worker for the whole session: a fresh introspection process per save is
+  // the boot tax this avoids (docs/superpowers/specs/2026-08-18-widget-sdk-persistent-introspect-worker-design.md).
+  const introspectSession = createIntrospectSession();
 
   async function flush(): Promise<void> {
     debounceTimer = null;
@@ -362,7 +365,9 @@ export async function runConnect(
       const origCwd = process.cwd();
       process.chdir(cwd);
       try {
-        await withQuietStdout(() => buildWidgets({ ...buildOpts, only: widgets }));
+        await withQuietStdout(() =>
+          buildWidgets({ ...buildOpts, only: widgets, session: introspectSession }),
+        );
       } finally {
         process.chdir(origCwd);
       }
@@ -421,6 +426,9 @@ export async function runConnect(
     log.info("Disconnecting...");
     if (debounceTimer) clearTimeout(debounceTimer);
     watcher.close();
+    // connect never exits normally, so without this the worker only dies via
+    // its stdin-EOF watchdog.
+    await introspectSession.dispose();
 
     for (const slug of registeredTags) {
       try {

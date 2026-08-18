@@ -21,14 +21,8 @@ export async function runPreview(cwd: string, names: string[], isolate: boolean)
     process.exit(1);
   }
 
-  // Capture the REAL stdout writer before withQuietStdout no-ops
-  // process.stdout.write. A clack spinner writes through that same override and
-  // would freeze inside the quiet block, so progress goes out this bound
-  // reference (which the override cannot intercept) as plain lines. Build/vite
-  // noise stays silenced; only these phase lines get through.
-  const realWrite = process.stdout.write.bind(process.stdout);
   const progress = (m: string) => {
-    realWrite(`${color.gray("│")}  ${color.dim(m)}\n`);
+    process.stdout.write(`${color.gray("│")}  ${color.dim(m)}\n`);
   };
 
   log.info(names.length ? `Previewing ${names.join(", ")}` : "Previewing all widgets");
