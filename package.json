@@ -1,6 +1,6 @@
 {
   "name": "@glasshome/widget-cli",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "CLI for creating and managing GlassHome widgets",
   "type": "module",
   "bin": {
@@ -30,7 +30,7 @@
     "@fontsource-variable/geist-mono": "^5.2.8",
     "@glasshome/sync-layer": "0.7.2",
     "@glasshome/widget-contract": "0.2.0",
-    "@glasshome/widget-sdk": "1.10.3",
+    "@glasshome/widget-sdk": "1.11.0",
     "@iconify-json/lucide": "^1.2.0",
     "@iconify-json/mdi": "^1.2.3",
     "@tailwindcss/vite": "^4.1.13",

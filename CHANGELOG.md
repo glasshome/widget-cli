@@ -5,6 +5,21 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] - 2026-08-18
+
+### Fixed
+
+- `connect`, `build` and `preview` showed no progress while widgets were
+  building: the spinner was silenced along with the build's own output, so the
+  CLI printed its first line and then appeared to hang until the build was
+  done.
+
+### Changed
+
+- `connect` now checks each rebuild in one reused worker instead of starting a
+  fresh process per save, so saves are faster and no longer time out after the
+  editor has been idle. Needs `@glasshome/widget-sdk` 1.11.0.
+
 ## [0.11.0] - 2026-08-16
 
 ### Changed
