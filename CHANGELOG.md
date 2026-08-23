@@ -5,6 +5,14 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.2] - 2026-08-23
+
+### Changed
+
+- Builds on `@glasshome/widget-sdk` 1.11.1: widget CSS keeps
+  `transparent` / `rgba()` instead of hex colors with alpha, which some
+  embedded WebViews (Shelly Wall Display) drop.
+
 ## [0.11.1] - 2026-08-18
 
 ### Fixed
