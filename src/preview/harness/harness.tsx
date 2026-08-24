@@ -20,6 +20,7 @@ import { addAPIProvider, addCollection } from "iconify-icon";
 // (custom properties cross the boundary; class rules don't). Without them,
 // shadow-side calc(var(--radius)+…) collapses — sharp corners, no border.
 import "@glasshome/ui/styles";
+import uiCss from "@glasshome/ui/styles?raw";
 // Fonts must load at the document (an @font-face in an adopted/shadow sheet
 // won't); the family name then inherits into the widget shadow. Same set dash's
 // styles.css loads.
@@ -119,6 +120,14 @@ FROST_SHEET.replaceSync(
   ".glasshome-widget { --glass-frost: linear-gradient(var(--card), var(--card)); }",
 );
 
+/* ui's material lives in class rules (.glass, .glass-tint), and class rules do
+   not cross a shadow boundary — only custom properties inherit. Without this,
+   every @glasshome/ui component the SDK re-exports renders inside a widget with
+   its layout classes but no material. Adopted verbatim: globals.css declares on
+   :where(.glass), never :root, so it needs no re-scoping. */
+const UI_SHEET = new CSSStyleSheet();
+UI_SHEET.replaceSync(uiCss);
+
 /** Mount via the shared SDK recipe (`@glasshome/widget-sdk/host`): closed shadow
     root, injected tokens, adopted widget CSS, WidgetCtx provider, `dark`
     mirrored onto the host. `dark` is the default `mirrorClasses`; the `dark`
@@ -135,7 +144,7 @@ function mount(
     config: () => config,
     ctx,
     cssText,
-    extraSheets: [FROST_SHEET],
+    extraSheets: [UI_SHEET, FROST_SHEET],
     onCrash: (err) => console.error("[harness] widget threw:", err),
   });
 }
