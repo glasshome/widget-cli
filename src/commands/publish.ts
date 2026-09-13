@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { cancel, isCancel, log, select, spinner } from "@clack/prompts";
+import { cancel, log, select, spinner } from "@clack/prompts";
 import semver from "semver";
 import { getHubUrl, getToken } from "../utils/auth";
 import { confirmPublish, fetchScopes, requestPublish, uploadToR2 } from "../utils/hub-api";
+import { cancelled } from "../utils/prompt";
 import {
   discoverWidgets,
   formatBytes,
@@ -84,12 +85,12 @@ export async function runPublish(
       })),
     });
 
-    if (isCancel(choice)) {
+    if (cancelled(choice)) {
       cancel("Publish cancelled.");
       process.exit(0);
     }
 
-    scope = choice as string;
+    scope = choice;
   }
 
   // Step 4: Select widget
@@ -121,11 +122,11 @@ export async function runPublish(
       options: widgetOptions,
     });
 
-    if (isCancel(selected)) {
+    if (cancelled(selected)) {
       cancel("Publish cancelled.");
       process.exit(0);
     }
-    widgetName = selected as string;
+    widgetName = selected;
   }
 
   const manifest = readManifest(cwd, widgetName);
@@ -148,11 +149,11 @@ export async function runPublish(
       ],
     });
 
-    if (isCancel(choice)) {
+    if (cancelled(choice)) {
       cancel("Publish cancelled.");
       process.exit(0);
     }
-    bump = choice as string;
+    bump = choice;
   }
 
   let version = currentVersion;
