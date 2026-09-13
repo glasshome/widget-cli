@@ -9,8 +9,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { cancel, confirm, isCancel, log, note, spinner, text } from "@clack/prompts";
+import { cancel, confirm, log, note, spinner, text } from "@clack/prompts";
 import color from "picocolors";
+import { cancelled } from "../utils/prompt";
 import { defaultSdkRange, FALLBACK_SDK_RANGE } from "../utils/sdk-version";
 import { getCliVersion } from "../utils/version";
 import { promptWidgetDetails, scaffoldWidget } from "./add";
@@ -59,7 +60,7 @@ export async function runCreate() {
     },
   });
 
-  if (isCancel(projectName)) {
+  if (cancelled(projectName)) {
     cancel("Operation cancelled.");
     process.exit(0);
   }
@@ -70,7 +71,7 @@ export async function runCreate() {
     defaultValue: "",
   });
 
-  if (isCancel(projectDescription)) {
+  if (cancelled(projectDescription)) {
     cancel("Operation cancelled.");
     process.exit(0);
   }
@@ -80,7 +81,7 @@ export async function runCreate() {
   const widgetDetails = await promptWidgetDetails();
   if (!widgetDetails) process.exit(0);
 
-  const targetDir = resolve(process.cwd(), projectName as string);
+  const targetDir = resolve(process.cwd(), projectName);
 
   if (existsSync(targetDir)) {
     cancel(`Directory "${projectName}" already exists.`);
@@ -115,7 +116,7 @@ export async function runCreate() {
     }
 
     const projectDesc =
-      (projectDescription as string) || `A GlassHome widget project: ${projectName}`;
+      projectDescription || `A GlassHome widget project: ${projectName}`;
 
     // Replace project-level placeholders in package.json. Pin the CLI to the
     // version that scaffolded the project (caret) so `bun widget` resolves the
@@ -123,7 +124,7 @@ export async function runCreate() {
     // stale global/bunx copy.
     const pkgPath = join(targetDir, "package.json");
     let pkgContent = readFileSync(pkgPath, "utf-8");
-    pkgContent = pkgContent.replace(/PROJECT_NAME/g, projectName as string);
+    pkgContent = pkgContent.replace(/PROJECT_NAME/g, projectName);
     pkgContent = pkgContent.replace(/PROJECT_DESCRIPTION/g, projectDesc);
     pkgContent = pkgContent.replace(/CLI_VERSION/g, `^${getCliVersion()}`);
     // Nothing is installed yet, so this comes from the SDK the CLI ships
@@ -134,7 +135,7 @@ export async function runCreate() {
     // Replace project-level placeholders in README.md
     const readmePath = join(targetDir, "README.md");
     let readmeContent = readFileSync(readmePath, "utf-8");
-    readmeContent = readmeContent.replace(/PROJECT_NAME/g, projectName as string);
+    readmeContent = readmeContent.replace(/PROJECT_NAME/g, projectName);
     readmeContent = readmeContent.replace(/PROJECT_DESCRIPTION/g, projectDesc);
     writeFileSync(readmePath, readmeContent);
 
@@ -153,7 +154,7 @@ export async function runCreate() {
       initialValue: true,
     });
 
-    if (!isCancel(shouldInstall) && shouldInstall) {
+    if (!cancelled(shouldInstall) && shouldInstall) {
       const installSpinner = spinner();
       installSpinner.start("Installing dependencies...");
       const installProc = Bun.spawnSync(["bun", "install"], { cwd: installCwd });
@@ -179,7 +180,7 @@ export async function runCreate() {
         initialValue: true,
       });
 
-      if (!isCancel(shouldGit) && shouldGit) {
+      if (!cancelled(shouldGit) && shouldGit) {
         const gitSpinner = spinner();
         gitSpinner.start("Initializing git repository...");
         const initProc = Bun.spawnSync(["git", "init"], { cwd: targetDir });
@@ -201,7 +202,7 @@ export async function runCreate() {
       steps.push(color.cyan(`cd ${projectName}`));
     } else {
       steps.push(color.cyan(`cd ${projectName}`));
-      if (isCancel(shouldInstall) || !shouldInstall) steps.push(color.cyan("bun install"));
+      if (cancelled(shouldInstall) || !shouldInstall) steps.push(color.cyan("bun install"));
     }
     steps.push(cmd("bun widget connect <url>", "connect to a dashboard for live testing"));
     steps.push(cmd("bun widget add", "add another widget"));

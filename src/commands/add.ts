@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { cancel, isCancel, log, text } from "@clack/prompts";
+import { cancel, log, text } from "@clack/prompts";
+import { cancelled } from "../utils/prompt";
 import { defaultSdkRange, FALLBACK_SDK_RANGE } from "../utils/sdk-version";
 
 /** Capitalize kebab-case into PascalCase for component names. */
@@ -77,7 +78,7 @@ export async function promptWidgetDetails(defaults?: { widgetName?: string }): P
         return "Name must be lowercase alphanumeric with optional hyphens";
     },
   });
-  if (isCancel(widgetName)) {
+  if (cancelled(widgetName)) {
     cancel("Operation cancelled.");
     return null;
   }
@@ -87,14 +88,14 @@ export async function promptWidgetDetails(defaults?: { widgetName?: string }): P
     placeholder: "A GlassHome dashboard widget",
     defaultValue: "",
   });
-  if (isCancel(description)) {
+  if (cancelled(description)) {
     cancel("Operation cancelled.");
     return null;
   }
 
   return {
-    widgetName: widgetName as string,
-    description: description as string,
+    widgetName,
+    description,
   };
 }
 
