@@ -5,6 +5,13 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.5](https://github.com/glasshome/widget-cli/compare/v0.13.4...v0.13.5) (2026-09-21)
+
+
+### Bug Fixes
+
+* **deps:** the sync-layer pin follows 0.8.2 ([#7](https://github.com/glasshome/widget-cli/issues/7)) ([c91eb01](https://github.com/glasshome/widget-cli/commit/c91eb013dce4cddbc446db6057c2eb39025f42dc))
+
 ## [0.13.4](https://github.com/glasshome/widget-cli/compare/v0.13.3...v0.13.4) (2026-09-13)
 
 
