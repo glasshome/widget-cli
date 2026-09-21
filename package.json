@@ -28,7 +28,7 @@
     "@fontsource-variable/caveat": "^5.2.8",
     "@fontsource-variable/geist": "^5.2.9",
     "@fontsource-variable/geist-mono": "^5.2.8",
-    "@glasshome/sync-layer": "0.8.1",
+    "@glasshome/sync-layer": "0.8.2",
     "@glasshome/widget-contract": "0.2.1",
     "@glasshome/widget-sdk": "1.15.1",
     "@iconify-json/lucide": "^1.2.0",
