@@ -33,6 +33,7 @@
     "@glasshome/widget-sdk": "1.16.0",
     "@iconify-json/lucide": "^1.2.0",
     "@iconify-json/mdi": "^1.2.3",
+    "@iconify/utils": "^3.1.4",
     "@tailwindcss/vite": "^4.1.13",
     "open": "^11.0.0",
     "picocolors": "^1.1.1",

@@ -3,8 +3,9 @@ import { instantiateWidget } from "@glasshome/widget-sdk/host";
 import { claimHostApi, getEntityView } from "@glasshome/sync-layer";
 import { byDomain, useAreas, useEntities } from "@glasshome/sync-layer/solid";
 import type { EntityDataAdapter } from "@glasshome/ui/solid";
-import { provideEntityData } from "@glasshome/ui/solid";
+import { provideEntityData, provideIcons } from "@glasshome/ui/solid";
 import type { IconifyJSON } from "@iconify/types";
+import { getIconData } from "@iconify/utils";
 // `?url` + runtime fetch, NOT a JSON import. Vite turns an imported JSON file
 // into an ES module — a multi-megabyte object literal the JS engine has to
 // evaluate on every page load, which cost ~200s per render. Fetching the same
@@ -43,6 +44,18 @@ async function preloadIcons(): Promise<void> {
   ]);
   addCollection(mdi);
   addCollection(lucide);
+  const collections: Record<string, IconifyJSON> = { mdi, lucide };
+  provideIcons({
+    bundled: {},
+    load: async (names) =>
+      Object.fromEntries(
+        names.map((name) => {
+          const [prefix = "", ...rest] = name.split(":");
+          const set = collections[prefix];
+          return [name, set ? (getIconData(set, rest.join(":")) ?? null) : null];
+        }),
+      ),
+  });
 }
 
 // No network fallback. Dash repoints this provider at its own /iconify/ proxy;
