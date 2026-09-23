@@ -1,9 +1,5 @@
-import { copyFileSync, mkdirSync, readdirSync, rmSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { buildWidgets } from "@glasshome/widget-sdk/vite";
-import tailwindcss from "@tailwindcss/vite";
-import { createServer } from "vite";
-import solid from "vite-plugin-solid";
+import { mkdirSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   freezeClock,
   hashWidgetArtifacts,
@@ -14,6 +10,7 @@ import {
   withRenderTimeout,
   withSharedBrowser,
 } from "./constraints";
+import { serveHarness } from "./serve";
 
 const THEMES = ["light", "dark"] as const;
 
@@ -45,37 +42,17 @@ export interface PreviewOptions {
 
 // Filenames become CDN path segments, so keep them to [a-z0-9-]: an example
 // labelled "Solar, battery and EV" must not put a comma in a URL.
-function slug(s: string): string {
+export function slug(s: string): string {
   return s
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 }
 
-// Every ancestor of the project dir, so vite's fs guard allows the harness to
-// reach node_modules hoisted anywhere up the workspace (bun hoists widget-cli's
-// deps to the project root, which may be several levels above a widget project).
-function ancestors(dir: string): string[] {
-  const out: string[] = [];
-  let d = dir;
-  for (;;) {
-    out.push(d);
-    const parent = dirname(d);
-    if (parent === d) break;
-    d = parent;
-  }
-  return out;
-}
-
 /**
  * Build every widget, serve the harness, and screenshot each authored example
  * in light and dark under the render worker's constraints (frozen clock, DNS
  * blackhole, per-render timeout, verify-before-execute hash pin).
- *
- * The vite root is a temp dir created UNDER the project so that: the harness's
- * `../dist/*.js` glob resolves to `<projectDir>/dist`, and every bare import
- * (@glasshome/*, iconify, solid) resolves from the project's own node_modules —
- * a single solid/ui instance, which the built bundle's external imports require.
  */
 export async function runPreview(opts: PreviewOptions): Promise<PreviewSummary> {
   const projectDir = resolve(opts.projectDir);
@@ -83,57 +60,16 @@ export async function runPreview(opts: PreviewOptions): Promise<PreviewSummary> 
   const isolate = opts.isolate ?? false;
   const progress = opts.onProgress ?? (() => {});
 
-  const distDir = resolve(projectDir, "dist");
   const outDir = resolve(projectDir, "preview");
-  const harnessSrc = resolve(import.meta.dirname, "harness");
-  // Temp vite root under the project: keeps node_modules resolution and the
-  // `../dist` glob pointed at the project, and is removed when the run ends.
-  const tempRoot = resolve(projectDir, ".glasshome-preview");
-
-  // 1. Build the widget bundles so authored examples land in dist/<name>.js.
-  progress(only.length ? `Building ${only.join(", ")}...` : "Building widgets...");
-  process.chdir(projectDir);
-  await buildWidgets({
-    srcDir: "src",
-    outDir: "dist",
-    ...(only.length ? { only } : {}),
-    plugins: [solid({ solid: { delegateEvents: false } })],
-  });
-
-  const widgetNames = readdirSync(distDir)
-    .filter((f) => f.endsWith(".js"))
-    .map((f) => f.slice(0, -3))
-    .filter((n) => (only.length ? only.includes(n) : true))
-    .sort();
-
-  // 2. Stage the harness into the temp root and serve it.
-  rmSync(tempRoot, { recursive: true, force: true });
-  mkdirSync(tempRoot, { recursive: true });
-  copyFileSync(resolve(harnessSrc, "harness.tsx"), resolve(tempRoot, "harness.tsx"));
-  copyFileSync(resolve(harnessSrc, "index.html"), resolve(tempRoot, "index.html"));
+  const server = await serveHarness(projectDir, only, progress);
+  const { base, origin, distDir, widgets: widgetNames } = server;
 
   const skipped: string[] = [];
   let shot = 0;
   const failures: Failure[] = [];
   const shotLists = new Map<string, ShotListEntry[]>();
 
-  const server = await createServer({
-    root: tempRoot,
-    configFile: false,
-    // delegateEvents: false — widgets mount in closed shadow roots where Solid's
-    // document-level event delegation cannot see the target (matches the widgets
-    // build and dash mount). tailwindcss() compiles @glasshome/ui/styles so the
-    // app theme tokens land on :root exactly as they do in dash.
-    plugins: [tailwindcss(), solid({ solid: { delegateEvents: false } })],
-    server: { fs: { allow: [tempRoot, ...ancestors(projectDir)] } },
-  });
-
   try {
-    await server.listen();
-    const base = server.resolvedUrls?.local[0];
-    if (!base) throw new Error("vite dev server has no local url");
-    const origin = new URL(base).origin;
-
     mkdirSync(outDir, { recursive: true });
 
     // 3. Enumerate each widget's shot list (one locked browser for the whole pass).
@@ -250,9 +186,7 @@ export async function runPreview(opts: PreviewOptions): Promise<PreviewSummary> 
     if (isolate) await runAll(null);
     else await withSharedBrowser((shared) => runAll(shared));
   } finally {
-    await server.close().catch(() => {});
-    // Temp root is throwaway staging; never leave it in the project tree.
-    rmSync(tempRoot, { recursive: true, force: true });
+    await server.close();
   }
 
   return { shots: shot, widgets: shotLists.size, skipped, failures };

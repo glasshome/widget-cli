@@ -1,6 +1,6 @@
 import type { ReactiveWidgetContext, WidgetDefinition } from "@glasshome/widget-sdk";
 import { instantiateWidget } from "@glasshome/widget-sdk/host";
-import { claimHostApi, getEntityView } from "@glasshome/sync-layer";
+import { callService, claimHostApi, getEntityView } from "@glasshome/sync-layer";
 import { byDomain, useAreas, useEntities } from "@glasshome/sync-layer/solid";
 import type { EntityDataAdapter } from "@glasshome/ui/solid";
 import { provideEntityData, provideIcons } from "@glasshome/ui/solid";
@@ -175,6 +175,10 @@ async function main(): Promise<void> {
   document.documentElement.dataset.harnessExamples = JSON.stringify(
     examples.map((e) => ({ label: e.label, size: e.size })),
   );
+  document.documentElement.dataset.harnessBounds = JSON.stringify({
+    min: def.manifest.minSize,
+    max: def.manifest.maxSize,
+  });
   const example = examples[exIndex];
   if (!example) {
     document.title = "harness-error: no example";
@@ -192,10 +196,17 @@ async function main(): Promise<void> {
   const hostApi = claimHostApi();
   if (!hostApi) throw new Error("harness: host API already claimed");
   await hostApi.loadDemoData();
+  for (const call of params.getAll("svc")) {
+    const [service = "", entityId, data] = call.split("|");
+    const [domain = "", name = ""] = service.split(".");
+    await callService(domain, name, JSON.parse(data ?? "{}"), { entity_id: entityId });
+  }
 
   // Background and padding are the renderer's job: the preview is the widget
   // alone, tight and transparent (omitBackground on capture).
-  const { width, height } = tilePx(example.size);
+  const { width, height } = params.has("pw")
+    ? { width: Number(params.get("pw")), height: Number(params.get("ph")) }
+    : tilePx(example.size);
   const stage = document.getElementById("stage");
   if (!stage) return;
   stage.style.width = `${width}px`;
@@ -206,7 +217,11 @@ async function main(): Promise<void> {
     dimensions: () => ({ width, height }),
   };
 
-  mount(stage, def, example.config as Record<string, unknown>, ctx, css);
+  const config = {
+    ...(example.config as Record<string, unknown>),
+    ...JSON.parse(params.get("cfg") ?? "{}"),
+  };
+  mount(stage, def, config, ctx, css);
 
   await document.fonts.ready;
   // Signal to the capture driver that mount + fonts settled.

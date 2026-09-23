@@ -29,6 +29,13 @@ Commands:
                          --re-auth discards stored credentials and re-runs device approval
   preview [name...]      Screenshot widgets' examples (light + dark) into preview/
                          --isolate gives every render its own browser process
+                         --sizes <WxH,...|grid> renders at pixel sizes into preview/sweep/, with a
+                           contact sheet per example (grid: common dashboard sizes)
+                         --theme light|dark, --example <n,...> narrow the render
+                         --config <json> merges over the example's config
+                         --service <domain.service|entity_id|json> changes demo state first (repeatable)
+                         --at <iso time> sets the clock, --click <selector> taps before the shot
+                         --eval <expr> prints an expression per render (root = widget shadow root)
   validate [name]        Validate all widgets or a specific one
   publish [hub-url]      Build and publish a widget to Hub
   login [hub-url]        Authenticate with GlassHome Hub
@@ -46,6 +53,8 @@ Examples:
   glasshome-widget connect http://localhost:3333
   glasshome-widget preview
   glasshome-widget preview clock
+  glasshome-widget preview light --sizes 150x156,340x242 --theme dark
+  glasshome-widget preview clock --at 2026-06-15T21:00:00 --config '{"style":"analog"}'
   glasshome-widget validate
   glasshome-widget validate clock
   glasshome-widget info
@@ -72,6 +81,14 @@ const { values: flags, positionals } = parseArgs({
     to: { type: "string" },
     "re-auth": { type: "boolean" },
     isolate: { type: "boolean" },
+    sizes: { type: "string" },
+    theme: { type: "string" },
+    example: { type: "string" },
+    at: { type: "string" },
+    config: { type: "string" },
+    service: { type: "string", multiple: true },
+    click: { type: "string" },
+    eval: { type: "string" },
     dry: { type: "boolean" },
     help: { type: "boolean", short: "h" },
   },
@@ -144,8 +161,19 @@ switch (effectiveCommand) {
   case "preview": {
     const widgetDir = resolveWidgetDir();
     await notifySdkUpdate(widgetDir);
-    const { runPreview } = await import("../src/commands/preview");
-    await runPreview(widgetDir, args, flags.isolate === true);
+    const { runPreview, runSweepPreview, wantsSweep } = await import("../src/commands/preview");
+    const sweep = {
+      sizes: flags.sizes,
+      theme: str(flags.theme),
+      example: str(flags.example),
+      at: str(flags.at),
+      config: str(flags.config),
+      service: flags.service?.flatMap((s) => str(s) ?? []),
+      click: str(flags.click),
+      eval: str(flags.eval),
+    };
+    if (wantsSweep(sweep)) await runSweepPreview(widgetDir, args, sweep);
+    else await runPreview(widgetDir, args, flags.isolate === true);
     break;
   }
 

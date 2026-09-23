@@ -44,6 +44,10 @@ export const NO_EGRESS_ARGS = [
   "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost",
 ];
 
+/** `CHROMIUM_PATH` points at a system Chromium where Playwright's own build is absent or cannot run. */
+const launchLocked = () =>
+  chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, args: NO_EGRESS_ARGS });
+
 /**
  * Record (do not intercept) every non-local request the page attempts.
  *
@@ -181,13 +185,12 @@ export async function withSharedBrowser<T>(fn: (browser: SharedBrowser) => Promi
   // eventually wedges; recycling keeps cumulative state bounded.
   const PAGES_PER_BROWSER = 8;
 
-  const launch = () => chromium.launch({ args: NO_EGRESS_ARGS });
-  let browser = await launch();
+  let browser = await launchLocked();
   let served = 0;
 
   const recycle = async (): Promise<void> => {
     await hardClose(browser);
-    browser = await launch();
+    browser = await launchLocked();
     served = 0;
   };
 
@@ -229,7 +232,7 @@ export async function withFreshBrowser<T>(fn: (page: Page, browser: Browser) => 
   // point nix-ld at them so the bundled browser launches unmodified.
   applyNixLdOnce();
 
-  const browser = await chromium.launch({ args: NO_EGRESS_ARGS });
+  const browser = await launchLocked();
   try {
     const context = await browser.newContext({ deviceScaleFactor: 2 });
     const page = await context.newPage();
