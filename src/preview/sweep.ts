@@ -60,11 +60,13 @@ export const DEFAULT_SIZES: Box[] = [70, 156, 242, 328].flatMap((height) =>
 // Inverse of the harness's tilePx height: rows * 70 + (rows - 1) * 16.
 const rowsFor = (height: number) => Math.round((height + 16) / 86);
 
-// Playwright locators and `root` in --eval need to reach inside the widget.
-function openShadowRoots(): void {
+// Roots stay closed as in dash, so a handler that cannot fire there fails here too; --eval and --click reach in through this.
+function keepShadowRoots(): void {
   const attach = Element.prototype.attachShadow;
   Element.prototype.attachShadow = function (init) {
-    return attach.call(this, { ...init, mode: "open" });
+    const root = attach.call(this, init);
+    Object.defineProperty(this, "__widgetRoot", { value: root });
+    return root;
   };
 }
 
@@ -91,7 +93,7 @@ export async function runSweep(opts: SweepOptions): Promise<SweepSummary> {
 
   const render = async (page: Page, url: string, file: string): Promise<unknown> => {
     watchEgress(page, server.origin);
-    await page.addInitScript(openShadowRoots);
+    await page.addInitScript(keepShadowRoots);
     if (opts.at) await page.clock.install({ time: opts.at });
     else await freezeClock(page);
     await page.goto(url, { waitUntil: "domcontentloaded" });
@@ -103,13 +105,20 @@ export async function runSweep(opts: SweepOptions): Promise<SweepSummary> {
     if (opts.click) {
       // Playwright's actionability checks wait on animation frames, which a frozen clock never runs.
       await page.clock.resume();
-      await page.locator(opts.click).first().click({ timeout: 5_000 });
+      const at = await page.evaluate((selector) => {
+        const stage = document.getElementById("stage") as { __widgetRoot?: ShadowRoot } | null;
+        const box = stage?.__widgetRoot?.querySelector(selector)?.getBoundingClientRect();
+        return box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : null;
+      }, opts.click);
+      if (!at) throw new Error(`--click: nothing matches ${opts.click} inside the widget`);
+      await page.mouse.click(at.x, at.y);
       await page.waitForTimeout(1_500);
     }
     await page.locator("#stage").screenshot({ path: file, omitBackground: true });
     if (!opts.evaluate) return undefined;
     return page.evaluate((code) => {
-      const root = document.getElementById("stage")?.shadowRoot;
+      const root = (document.getElementById("stage") as { __widgetRoot?: ShadowRoot } | null)
+        ?.__widgetRoot;
       return new Function("root", `return (${code});`)(root);
     }, opts.evaluate);
   };
