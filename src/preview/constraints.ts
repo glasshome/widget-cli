@@ -157,6 +157,9 @@ function applyNixLdOnce(): void {
  * it never returns, so the next shot's recycle hangs on it forever. Race the
  * graceful close against a short deadline, then SIGKILL the process outright.
  */
+// A still shows the settled state: the theme zeroes transitions under reduced motion.
+const CONTEXT_OPTIONS = { deviceScaleFactor: 2, reducedMotion: "reduce" } as const;
+
 async function hardClose(browser: Browser): Promise<void> {
   // `process()` exists at runtime on a launched Chromium but is absent from the
   // base Browser type; narrow it here rather than at the call site.
@@ -202,14 +205,14 @@ export async function withSharedBrowser<T>(fn: (browser: SharedBrowser) => Promi
     }
     served++;
     try {
-      const context = await browser.newContext({ deviceScaleFactor: 2 });
+      const context = await browser.newContext(CONTEXT_OPTIONS);
       return await context.newPage();
     } catch {
       // Lost between the liveness check and the context: relaunch once so the
       // crash costs one render rather than the rest of the pass.
       await recycle();
       served = 1;
-      const context = await browser.newContext({ deviceScaleFactor: 2 });
+      const context = await browser.newContext(CONTEXT_OPTIONS);
       return context.newPage();
     }
   };
@@ -234,7 +237,7 @@ export async function withFreshBrowser<T>(fn: (page: Page, browser: Browser) => 
 
   const browser = await launchLocked();
   try {
-    const context = await browser.newContext({ deviceScaleFactor: 2 });
+    const context = await browser.newContext(CONTEXT_OPTIONS);
     const page = await context.newPage();
     return await fn(page, browser);
   } finally {
