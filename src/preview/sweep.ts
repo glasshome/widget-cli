@@ -62,6 +62,7 @@ const rowsFor = (height: number) => Math.round((height + 16) / 86);
 
 // Roots stay closed as in dash, so a handler that cannot fire there fails here too; --eval and --click reach in through this.
 function keepShadowRoots(): void {
+  // oxlint-disable-next-line typescript/unbound-method -- captured to re-call with .call(this) from the patch
   const attach = Element.prototype.attachShadow;
   Element.prototype.attachShadow = function (init) {
     const root = attach.call(this, init);
@@ -116,11 +117,9 @@ export async function runSweep(opts: SweepOptions): Promise<SweepSummary> {
     }
     await page.locator("#stage").screenshot({ path: file, omitBackground: true });
     if (!opts.evaluate) return undefined;
-    return page.evaluate((code) => {
-      const root = (document.getElementById("stage") as { __widgetRoot?: ShadowRoot } | null)
-        ?.__widgetRoot;
-      return new Function("root", `return (${code});`)(root);
-    }, opts.evaluate);
+    return page.evaluate(
+      `(function (root) { return (${opts.evaluate}); })(document.getElementById("stage")?.__widgetRoot)`,
+    );
   };
 
   try {

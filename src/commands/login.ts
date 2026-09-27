@@ -42,7 +42,7 @@ export async function runLogin(hubUrl?: string): Promise<void> {
     }, LOGIN_TIMEOUT_MS);
 
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-      const url = new URL(req.url!, `http://${REDIRECT_HOST}:${REDIRECT_PORT}`);
+      const url = new URL(req.url ?? "/", `http://${REDIRECT_HOST}:${REDIRECT_PORT}`);
 
       if (url.pathname !== "/callback") {
         res.writeHead(404);

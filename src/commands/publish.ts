@@ -23,6 +23,29 @@ interface PublishOptions {
   scope?: string;
 }
 
+async function authenticate(hubUrl: string): Promise<string> {
+  const stored = await getToken(hubUrl);
+  if (stored) return stored;
+
+  log.warn("Not authenticated. Starting login...");
+  try {
+    await runLogin(hubUrl);
+  } catch (err) {
+    log.error(err instanceof Error ? err.message : "Login failed.");
+    process.exit(1);
+  }
+  const token = await getToken(hubUrl);
+  if (!token) {
+    log.error("Authentication failed. Run `glasshome-widget login` manually.");
+    process.exit(1);
+  }
+  return token;
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export async function runPublish(
   cwd: string,
   hubUrlOverride?: string,
@@ -39,25 +62,10 @@ export async function runPublish(
   // Stop an unsupported CLI before it uploads against a protocol it predates.
   await enforceCliVersion(hubUrl);
 
-  let token = await getToken(hubUrl);
-
-  if (!token) {
-    log.warn("Not authenticated. Starting login...");
-    try {
-      await runLogin(hubUrl);
-    } catch (err) {
-      log.error(err instanceof Error ? err.message : "Login failed.");
-      process.exit(1);
-    }
-    token = await getToken(hubUrl);
-    if (!token) {
-      log.error("Authentication failed. Run `glasshome-widget login` manually.");
-      process.exit(1);
-    }
-  }
+  const token = await authenticate(hubUrl);
 
   // Step 3: Select scope
-  const scopes = await fetchScopes(hubUrl, token!);
+  const scopes = await fetchScopes(hubUrl, token);
   if (scopes.length === 0) {
     log.error("No publishing scopes available. Ensure your account is properly set up.");
     process.exit(1);
@@ -72,8 +80,8 @@ export async function runPublish(
     }
     scope = match.name;
     log.info(`Publishing as @${scope} (${match.type})`);
-  } else if (scopes.length === 1) {
-    const only = scopes[0]!;
+  } else if (scopes.length === 1 && scopes[0]) {
+    const only = scopes[0];
     scope = only.name;
     log.info(`Publishing as @${scope} (${only.type})`);
   } else {
@@ -226,7 +234,7 @@ export async function runPublish(
 
   let publishData: Awaited<ReturnType<typeof requestPublish>>;
   try {
-    publishData = await requestPublish(hubUrl, token!, {
+    publishData = await requestPublish(hubUrl, token, {
       scope,
       name: widgetName,
       displayName: builtManifest.name,
@@ -243,20 +251,20 @@ export async function runPublish(
         : {}),
       manifestJson: JSON.stringify(builtManifest),
     });
-  } catch (err: any) {
-    if (err.status === 409) {
+  } catch (err) {
+    if (err instanceof Error && "status" in err && err.status === 409) {
       s.stop(`${builtManifest.name}@${version} already published, bump version to republish`);
       process.exit(0);
     }
-    s.stop(`Publish failed: ${err.message}`);
+    s.stop(`Publish failed: ${errorMessage(err)}`);
     process.exit(1);
   }
 
   s.message(`Uploading ${builtManifest.name} to CDN...`);
   try {
     await uploadToR2(publishData.uploadUrl, bundleBuffer);
-  } catch (err: any) {
-    s.stop(`Upload failed: ${err.message}`);
+  } catch (err) {
+    s.stop(`Upload failed: ${errorMessage(err)}`);
     process.exit(1);
   }
 
@@ -270,20 +278,20 @@ export async function runPublish(
     s.message(`Uploading ${builtManifest.name} styles to CDN...`);
     try {
       await uploadToR2(publishData.cssUploadUrl, cssBuffer, "text/css");
-    } catch (err: any) {
-      s.stop(`CSS upload failed: ${err.message}`);
+    } catch (err) {
+      s.stop(`CSS upload failed: ${errorMessage(err)}`);
       process.exit(1);
     }
   }
 
   s.message(`Confirming ${builtManifest.name}...`);
   try {
-    const result = await confirmPublish(hubUrl, token!, publishData.versionId);
+    const result = await confirmPublish(hubUrl, token, publishData.versionId);
     s.stop(`Published ${builtManifest.name}@${version}`);
     log.info(`CDN: ${result.bundleUrl}`);
     if (result.cssUrl) log.info(`CSS: ${result.cssUrl}`);
-  } catch (err: any) {
-    s.stop(`Confirmation failed: ${err.message}`);
+  } catch (err) {
+    s.stop(`Confirmation failed: ${errorMessage(err)}`);
     process.exit(1);
   }
 }
