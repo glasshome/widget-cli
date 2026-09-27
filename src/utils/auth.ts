@@ -212,6 +212,7 @@ export async function deviceAuthorize(
     expires_in: number;
     interval?: number;
   };
+  if (!data.device_code) throw new Error("Device authorization returned no device code");
   return {
     deviceCode: data.device_code,
     userCode: data.user_code,

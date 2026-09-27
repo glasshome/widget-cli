@@ -119,4 +119,11 @@ describe("deviceAuthorize", () => {
     const outcome = deviceAuthorize(API, () => Promise.resolve(json(503, {})));
     await expect(outcome).rejects.toThrow("HTTP 503");
   });
+
+  test("throws when the server answers without a device code", async () => {
+    const outcome = deviceAuthorize(API, () =>
+      Promise.resolve(json(200, { user_code: "A", verification_uri: `${API}/device`, expires_in: 900 })),
+    );
+    await expect(outcome).rejects.toThrow("no device code");
+  });
 });
