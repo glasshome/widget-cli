@@ -223,6 +223,8 @@ async function main(): Promise<void> {
   };
   mount(stage, def, config, ctx, css);
 
+  // fonts.ready settles before the shadow root's text is laid out, so a cold page captures the fallback face.
+  await Promise.all([...document.fonts].map((face) => face.load().catch(() => undefined)));
   await document.fonts.ready;
   // Signal to the capture driver that mount + fonts settled.
   document.documentElement.setAttribute("data-harness-ready", "1");
