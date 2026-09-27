@@ -5,6 +5,21 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0](https://github.com/glasshome/widget-cli/compare/v0.13.6...v0.14.0) (2026-09-27)
+
+
+### Features
+
+* **preview:** --sizes renders widgets at chosen sizes and states, with contact sheets ([c244501](https://github.com/glasshome/widget-cli/commit/c2445015f2af8fffdf2cc1e77de301b1917e6d10))
+
+
+### Bug Fixes
+
+* **deps:** widget-sdk 1.17.0, sync-layer 0.9.0, widget-contract 0.3.0 ([e1f5746](https://github.com/glasshome/widget-cli/commit/e1f5746047a234866c254476e9f4e82f0c69f880))
+* **preview:** stills render with reduced motion, so mount transitions show their settled state ([bd760a9](https://github.com/glasshome/widget-cli/commit/bd760a9597f0a1b16fba09f749a9f8f2c0ee86bd))
+* **preview:** the harness provides ui icons, so ui-drawn icons render ([d1d4f02](https://github.com/glasshome/widget-cli/commit/d1d4f02f63f39985968fd7b9c317e79529ecfd75))
+* **preview:** widget roots stay closed as in dash; --click and --eval reach in through the kept root ([02f9879](https://github.com/glasshome/widget-cli/commit/02f9879891ff2a5d551fe5551dd5d73f97da1612))
+
 ## [0.13.6](https://github.com/glasshome/widget-cli/compare/v0.13.5...v0.13.6) (2026-09-22)
 
 
