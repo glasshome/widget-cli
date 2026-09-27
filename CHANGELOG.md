@@ -5,6 +5,15 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.2](https://github.com/glasshome/widget-cli/compare/v0.14.1...v0.14.2) (2026-09-27)
+
+
+### Bug Fixes
+
+* **connect:** refuse a device authorization answer with no device code ([5f33575](https://github.com/glasshome/widget-cli/commit/5f33575f69b2789f5e90429addaf87d9297315bf))
+* **deps:** sync-layer 0.9.1, widget-sdk 1.18.0 ([449e281](https://github.com/glasshome/widget-cli/commit/449e2818d259644013e497d0e52483716c993ab1))
+* **lint:** drop non-null assertions, any catches and Function eval ([eaa42df](https://github.com/glasshome/widget-cli/commit/eaa42df458dcc7ca0d6734eeff0ffe05d512e00e))
+
 ## [0.14.1](https://github.com/glasshome/widget-cli/compare/v0.14.0...v0.14.1) (2026-09-27)
 
 
