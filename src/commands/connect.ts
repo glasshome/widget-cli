@@ -4,7 +4,16 @@ import { log, note, spinner } from "@clack/prompts";
 import color from "picocolors";
 import { buildWidgets, createIntrospectSession } from "@glasshome/widget-sdk/vite";
 import { trpcMutate, trpcQuery } from "../utils/api";
-import { clearHostToken, extractHost, getHostToken, storeHostToken } from "../utils/auth";
+import {
+  clearHostToken,
+  type DeviceGrant,
+  type DevicePollOutcome,
+  deviceAuthorize,
+  extractHost,
+  getHostToken,
+  pollDeviceToken,
+  storeHostToken,
+} from "../utils/auth";
 import { lintAndReport } from "../utils/lint-source";
 import { withQuietStdout } from "../utils/quiet";
 
@@ -111,23 +120,11 @@ async function uploadAllWidgets(apiUrl: string, distDir: string, token: string):
   return slugs;
 }
 
-export async function runConnect(
-  apiUrl: string,
-  cwd: string,
-  opts: { reAuth?: boolean } = {},
-): Promise<void> {
-  const distDir = resolve(cwd, "dist");
-  const solid = (await import("vite-plugin-solid")).default;
-  // delegateEvents: false, widgets run in closed shadow roots where Solid's
-  // document-level event delegation cannot see the target.
-  const buildOpts = {
-    srcDir: "src",
-    outDir: "dist",
-    plugins: [solid({ solid: { delegateEvents: false } })],
-  };
+type Spinner = ReturnType<typeof spinner>;
 
-  // Step 1: Initial build
-  const s = spinner();
+type BuildOpts = NonNullable<Parameters<typeof buildWidgets>[0]>;
+
+async function buildOrExit(cwd: string, buildOpts: BuildOpts, s: Spinner): Promise<void> {
   s.start("Building widgets...");
   try {
     const origCwd = process.cwd();
@@ -140,210 +137,131 @@ export async function runConnect(
     process.exit(1);
   }
   s.stop("Build complete");
-  lintAndReport(cwd);
+}
 
-  // Step 2: Check registry was generated
-  const registryPath = resolve(distDir, "registry.json");
-  if (!existsSync(registryPath)) {
-    log.error("dist/registry.json not found after build. Check your vite.config.ts.");
-    process.exit(1);
+async function validStoredToken(api: string, host: string): Promise<string> {
+  const existingToken = getHostToken(host);
+  if (!existingToken) return "";
+  try {
+    const check = await fetch(`${api}/api/auth/get-session`, {
+      headers: { Authorization: `Bearer ${existingToken}` },
+    });
+    const body = check.ok ? ((await check.json()) as { session?: unknown } | null) : null;
+    if (body?.session) {
+      log.info("Using stored credentials");
+      return existingToken;
+    }
+    clearHostToken(host);
+    log.warn("Stored credentials expired, re-authenticating");
+  } catch {
+    log.warn("Could not validate stored credentials, re-authenticating");
+  }
+  return "";
+}
+
+const POLL_FAILURE_MESSAGE: Record<
+  Exclude<DevicePollOutcome["kind"], "authorized" | "error" | "failed" | "timeout">,
+  string
+> = {
+  missing_token: "Auth response missing session token",
+  denied: "Authorization denied",
+  expired: "Device code expired",
+};
+
+function reportPollOutcome(outcome: DevicePollOutcome, s: Spinner): void {
+  switch (outcome.kind) {
+    case "authorized":
+    case "timeout":
+      return;
+    case "error":
+      s.stop(`Auth error: ${outcome.code}`);
+      return;
+    case "failed":
+      s.stop("Authorization failed");
+      log.warn(`Error polling for token: ${outcome.message}`);
+      return;
+    default:
+      s.stop(POLL_FAILURE_MESSAGE[outcome.kind]);
+  }
+}
+
+async function authorizeThisDevice(api: string, host: string, s: Spinner): Promise<string> {
+  s.start("Requesting authorization code...");
+  let grant: DeviceGrant;
+  try {
+    grant = await deviceAuthorize(api);
+  } catch (err) {
+    s.stop("Failed to request device code");
+    log.warn(
+      `Could not reach dashboard at ${api}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return "";
   }
 
-  // Step 3: Obtain bearer token via device authorization flow
-  const api = apiUrl.replace(/\/$/, "");
-  const host = extractHost(api);
-  let token = "";
+  s.stop("Authorization code ready");
+  log.info(`Open in browser: ${grant.verificationUriComplete}`);
+  log.info(`Device code: ${grant.userCode}`);
+  await import("open")
+    .then((m) => m.default(grant.verificationUriComplete))
+    .catch(() => {});
 
+  s.start("Waiting for authorization (approve in your browser)...");
+  const outcome = await pollDeviceToken(api, grant);
+  reportPollOutcome(outcome, s);
+  if (outcome.kind !== "authorized") {
+    s.stop("Not authorized");
+    return "";
+  }
+  storeHostToken(host, outcome.token, Date.now() + outcome.expiresIn * 1000);
+  s.stop("Authorized");
+  return outcome.token;
+}
+
+async function obtainToken(
+  api: string,
+  opts: { reAuth?: boolean },
+  s: Spinner,
+): Promise<string> {
+  const host = extractHost(api);
   if (opts.reAuth) {
     clearHostToken(host);
     log.info("Discarded stored credentials (--re-auth)");
   }
+  const stored = await validStoredToken(api, host);
+  return stored || authorizeThisDevice(api, host, s);
+}
 
-  // Validate stored token before using it
-  const existingToken = getHostToken(host);
-  if (existingToken) {
-    try {
-      const check = await fetch(`${api}/api/auth/get-session`, {
-        headers: { Authorization: `Bearer ${existingToken}` },
-      });
-      if (check.ok) {
-        const body = (await check.json()) as { session?: unknown } | null;
-        if (body?.session) {
-          token = existingToken;
-          log.info("Using stored credentials");
-        } else {
-          clearHostToken(host);
-          log.warn("Stored credentials expired, re-authenticating");
-        }
-      } else {
-        clearHostToken(host);
-        log.warn("Stored credentials expired, re-authenticating");
-      }
-    } catch {
-      log.warn("Could not validate stored credentials, re-authenticating");
-    }
-  }
-
-  if (!token) {
-    // Request a device code
-    s.start("Requesting authorization code...");
-    let deviceCode: string;
-    let userCode: string;
-    let verificationUriComplete: string;
-    let expiresIn: number;
-    let interval: number;
-
-    try {
-      const res = await fetch(`${api}/api/auth/device/code`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ client_id: "glasshome-widget-cli" }),
-      });
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-      const data = (await res.json()) as {
-        device_code: string;
-        user_code: string;
-        verification_uri: string;
-        verification_uri_complete?: string;
-        expires_in: number;
-        interval: number;
-      };
-      deviceCode = data.device_code;
-      userCode = data.user_code;
-      verificationUriComplete =
-        data.verification_uri_complete ??
-        `${data.verification_uri}?user_code=${encodeURIComponent(data.user_code)}`;
-      expiresIn = data.expires_in;
-      interval = data.interval ?? 5;
-    } catch (err) {
-      s.stop("Failed to request device code");
-      log.warn(
-        `Could not reach dashboard at ${api}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      // token stays empty, caught by guard below
-    }
-
-    if (deviceCode!) {
-      s.stop("Authorization code ready");
-
-      // Prompt user to visit the verification URL
-      log.info(`Open in browser: ${verificationUriComplete!}`);
-      log.info(`Device code: ${userCode!}`);
-
-      // Try to open browser automatically
-      await import("open")
-        .then((m) => m.default(verificationUriComplete!))
-        .catch(() => {});
-
-      // Poll for approval
-      s.start("Waiting for authorization (approve in your browser)...");
-      const deadline = Date.now() + expiresIn! * 1000;
-
-      while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, interval! * 1000));
-
-        try {
-          const res = await fetch(`${api}/api/auth/device/token`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-              device_code: deviceCode,
-              client_id: "glasshome-widget-cli",
-            }),
-          });
-
-          if (res.ok) {
-            // better-auth's device-authorization plugin returns an OAuth-style
-            // bundle: { access_token, token_type, expires_in, scope }. The
-            // access_token IS the first-party session token.
-            const data = (await res.json()) as {
-              access_token?: string;
-              expires_in?: number;
-            };
-            if (!data.access_token) {
-              s.stop("Auth response missing session token");
-              break;
-            }
-            token = data.access_token;
-            const tokenExpiresAt = Date.now() + (data.expires_in ?? 0) * 1000;
-            storeHostToken(host, token, tokenExpiresAt);
-            break;
-          }
-
-          const errData = (await res.json()) as { error?: string };
-          if (errData.error === "authorization_pending" || errData.error === "slow_down") {
-            if (errData.error === "slow_down") {
-              interval = Math.min(interval! + 5, 30);
-            }
-            continue;
-          }
-          if (errData.error === "access_denied") {
-            s.stop("Authorization denied");
-            break;
-          }
-          if (errData.error === "expired_token") {
-            s.stop("Device code expired");
-            break;
-          }
-          // Unexpected error, stop polling
-          s.stop(`Auth error: ${errData.error ?? res.status}`);
-          break;
-        } catch (err) {
-          s.stop("Authorization failed");
-          log.warn(`Error polling for token: ${err instanceof Error ? err.message : String(err)}`);
-          break;
-        }
-      }
-
-      if (token) {
-        s.stop("Authorized");
-      } else {
-        s.stop("Not authorized");
-      }
-    }
-  }
-
-  if (!token) {
-    log.warn("Authentication failed, widgets won't be connected. Log in at the dashboard first, then restart.");
-    return;
-  }
-
-  // Step 4: Enable dev mode if needed
-  s.start("Registering widgets with dashboard...");
+async function ensureDevMode(api: string, token: string): Promise<void> {
   try {
     const configData = await trpcQuery<{ devMode: boolean }>({
       apiUrl: api,
       path: "appConfig.get",
     });
-
     if (!configData.devMode) {
-      await trpcMutate({
-        apiUrl: api,
-        path: "appConfig.toggleDevMode",
-        token,
-        input: {},
-      });
+      await trpcMutate({ apiUrl: api, path: "appConfig.toggleDevMode", token, input: {} });
     }
   } catch {
     // Non-fatal, dev mode may already be enabled
   }
+}
 
-  // Step 5: Upload bundles and register widgets
-  const registeredTags = await uploadAllWidgets(apiUrl, distDir, token);
-  s.stop("Widgets registered");
+interface ReuploadWatch {
+  close: () => Promise<void>;
+}
 
-  // Step 6: Watch src/ for changes and rebuild + re-upload only the changed widget.
-  //
-  // Debounce strategy: collect changed widget names into `pending`, fire after
-  // DEBOUNCE_MS of quiet. If new changes arrive while a build is in flight,
-  // they accumulate and trigger one more pass after the current build finishes.
-  // Replaces a previous `rebuilding` boolean guard that silently dropped events
-  // arriving during a build (lost edits) and was vulnerable to Linux fs.watch
-  // coalescing two rapid writes into one event with stale content.
-  const srcDir = resolve(cwd, "src");
+/**
+ * Rebuild and re-upload only the widgets whose sources changed. Changes collect
+ * into `pending` and flush after DEBOUNCE_MS of quiet; changes arriving during a
+ * build trigger one more pass after it, so no edit is dropped.
+ */
+function watchAndReupload(opts: {
+  cwd: string;
+  apiUrl: string;
+  distDir: string;
+  buildOpts: BuildOpts;
+  token: string;
+}): ReuploadWatch {
+  const { cwd, apiUrl, distDir, buildOpts, token } = opts;
   const DEBOUNCE_MS = 150;
   const pending = new Set<string>();
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -372,8 +290,9 @@ export async function runConnect(
         process.chdir(origCwd);
       }
 
-      const registryPath = resolve(distDir, "registry.json");
-      const registry: RegistryJson = JSON.parse(readFileSync(registryPath, "utf-8"));
+      const registry: RegistryJson = JSON.parse(
+        readFileSync(resolve(distDir, "registry.json"), "utf-8"),
+      );
       for (const widgetName of widgets) {
         const widget = registry.widgets.find((w) => w.bundleUrl === `./${widgetName}.js`);
         if (widget) {
@@ -387,14 +306,13 @@ export async function runConnect(
       log.warn(`Rebuild failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       buildInFlight = false;
-      // Re-flush if events accumulated during this build.
       if (pending.size > 0) {
-        flush();
+        void flush();
       }
     }
   }
 
-  const watcher = watch(srcDir, { recursive: true }, (_event, filename) => {
+  const watcher = watch(resolve(cwd, "src"), { recursive: true }, (_event, filename) => {
     if (!filename) return;
     const widgetName = filename.split(/[\\/]/)[0] ?? filename;
     pending.add(widgetName);
@@ -402,16 +320,28 @@ export async function runConnect(
     debounceTimer = setTimeout(flush, DEBOUNCE_MS);
   });
 
-  // Count widgets
-  const widgetCount = existsSync(resolve(cwd, "src"))
-    ? readdirSync(resolve(cwd, "src")).filter(
-        (d) =>
-          statSync(resolve(cwd, "src", d)).isDirectory() &&
-          existsSync(resolve(cwd, "src", d, "manifest.json")),
-      ).length
-    : 0;
+  return {
+    close: async () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      watcher.close();
+      // connect never exits normally, so without this the worker only dies via
+      // its stdin-EOF watchdog.
+      await introspectSession.dispose();
+    },
+  };
+}
 
-  log.success(color.green(`Connected: ${widgetCount} widget(s) live`));
+function countWidgets(cwd: string): number {
+  const srcDir = resolve(cwd, "src");
+  if (!existsSync(srcDir)) return 0;
+  return readdirSync(srcDir).filter(
+    (d) =>
+      statSync(resolve(srcDir, d)).isDirectory() && existsSync(resolve(srcDir, d, "manifest.json")),
+  ).length;
+}
+
+function announceConnected(cwd: string): void {
+  log.success(color.green(`Connected: ${countWidgets(cwd)} widget(s) live`));
   note(
     [
       `${color.cyan("watching")}  src/ (edits auto-rebuild & re-upload)`,
@@ -420,22 +350,24 @@ export async function runConnect(
     ].join("\n"),
     "Live testing",
   );
+}
 
-  // Step 7: Handle SIGINT, unregister and clean up
+function disconnectOnSignal(opts: {
+  api: string;
+  token: string;
+  registeredTags: string[];
+  reupload: ReuploadWatch;
+}): void {
   const cleanup = async () => {
     log.info("Disconnecting...");
-    if (debounceTimer) clearTimeout(debounceTimer);
-    watcher.close();
-    // connect never exits normally, so without this the worker only dies via
-    // its stdin-EOF watchdog.
-    await introspectSession.dispose();
+    await opts.reupload.close();
 
-    for (const slug of registeredTags) {
+    for (const slug of opts.registeredTags) {
       try {
         await trpcMutate({
-          apiUrl: api,
+          apiUrl: opts.api,
           path: "widget.unregister",
-          token,
+          token: opts.token,
           input: { scope: "local", name: slug },
         });
       } catch {
@@ -449,6 +381,47 @@ export async function runConnect(
 
   process.on("SIGINT", cleanup);
   process.on("SIGTERM", cleanup);
+}
+
+export async function runConnect(
+  apiUrl: string,
+  cwd: string,
+  opts: { reAuth?: boolean } = {},
+): Promise<void> {
+  const distDir = resolve(cwd, "dist");
+  const solid = (await import("vite-plugin-solid")).default;
+  // delegateEvents: false, widgets run in closed shadow roots where Solid's
+  // document-level event delegation cannot see the target.
+  const buildOpts: BuildOpts = {
+    srcDir: "src",
+    outDir: "dist",
+    plugins: [solid({ solid: { delegateEvents: false } })],
+  };
+
+  const s = spinner();
+  await buildOrExit(cwd, buildOpts, s);
+  lintAndReport(cwd);
+
+  if (!existsSync(resolve(distDir, "registry.json"))) {
+    log.error("dist/registry.json not found after build. Check your vite.config.ts.");
+    process.exit(1);
+  }
+
+  const api = apiUrl.replace(/\/$/, "");
+  const token = await obtainToken(api, opts, s);
+  if (!token) {
+    log.warn("Authentication failed, widgets won't be connected. Log in at the dashboard first, then restart.");
+    return;
+  }
+
+  s.start("Registering widgets with dashboard...");
+  await ensureDevMode(api, token);
+  const registeredTags = await uploadAllWidgets(apiUrl, distDir, token);
+  s.stop("Widgets registered");
+
+  const reupload = watchAndReupload({ cwd, apiUrl, distDir, buildOpts, token });
+  announceConnected(cwd);
+  disconnectOnSignal({ api, token, registeredTags, reupload });
 
   // Keep alive
   await new Promise(() => {});

@@ -85,7 +85,7 @@ export function storeToken(hubData: HubAuth): void {
   writeAuthFile(data);
 }
 
-export function getStoredAuth(): HubAuth | null {
+function getStoredAuth(): HubAuth | null {
   return readAuthFile().hub ?? null;
 }
 
@@ -139,7 +139,7 @@ export async function getToken(hubUrl: string): Promise<string | null> {
   }
 }
 
-export function clearToken(): void {
+function clearToken(): void {
   const data = readAuthFile();
   delete data.hub;
   writeAuthFile(data);
@@ -157,8 +157,121 @@ export function getHubUrl(): string {
   return "https://glasshome.app";
 }
 
-export function getScope(): string | null {
-  return getStoredAuth()?.scope ?? null;
+// --- OAuth device authorization grant (RFC 8628) ---
+
+const CLI_CLIENT_ID = "glasshome-widget-cli";
+
+export interface DeviceGrant {
+  deviceCode: string;
+  userCode: string;
+  verificationUriComplete: string;
+  expiresIn: number;
+  interval: number;
+}
+
+export type DevicePollOutcome =
+  | { kind: "authorized"; token: string; expiresIn: number }
+  | { kind: "missing_token" }
+  | { kind: "denied" }
+  | { kind: "expired" }
+  | { kind: "error"; code: string | number }
+  | { kind: "failed"; message: string }
+  | { kind: "timeout" };
+
+type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
+
+export interface DevicePollDeps {
+  fetch: FetchFn;
+  sleep: (ms: number) => Promise<void>;
+  now: () => number;
+}
+
+const realPollDeps: DevicePollDeps = {
+  fetch: (url, init) => fetch(url, init),
+  sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+  now: () => Date.now(),
+};
+
+export async function deviceAuthorize(
+  api: string,
+  fetchImpl: FetchFn = realPollDeps.fetch,
+): Promise<DeviceGrant> {
+  const res = await fetchImpl(`${api}/api/auth/device/code`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ client_id: CLI_CLIENT_ID }),
+  });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const data = (await res.json()) as {
+    device_code: string;
+    user_code: string;
+    verification_uri: string;
+    verification_uri_complete?: string;
+    expires_in: number;
+    interval?: number;
+  };
+  return {
+    deviceCode: data.device_code,
+    userCode: data.user_code,
+    verificationUriComplete:
+      data.verification_uri_complete ??
+      `${data.verification_uri}?user_code=${encodeURIComponent(data.user_code)}`,
+    expiresIn: data.expires_in,
+    interval: data.interval ?? 5,
+  };
+}
+
+export async function pollDeviceToken(
+  api: string,
+  grant: DeviceGrant,
+  deps: DevicePollDeps = realPollDeps,
+): Promise<DevicePollOutcome> {
+  const deadline = deps.now() + grant.expiresIn * 1000;
+  let interval = grant.interval;
+
+  while (deps.now() < deadline) {
+    await deps.sleep(interval * 1000);
+
+    try {
+      const res = await deps.fetch(`${api}/api/auth/device/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+          device_code: grant.deviceCode,
+          client_id: CLI_CLIENT_ID,
+        }),
+      });
+
+      if (res.ok) {
+        // better-auth's device plugin returns an OAuth bundle whose access_token is the session token.
+        const data = (await res.json()) as { access_token?: string; expires_in?: number };
+        if (!data.access_token) return { kind: "missing_token" };
+        return { kind: "authorized", token: data.access_token, expiresIn: data.expires_in ?? 0 };
+      }
+
+      const errData = (await res.json()) as { error?: string };
+      switch (errData.error) {
+        case "slow_down":
+          interval = Math.min(interval + 5, 30);
+          continue;
+        case "authorization_pending":
+          continue;
+        case "access_denied":
+          return { kind: "denied" };
+        case "expired_token":
+          return { kind: "expired" };
+        default:
+          return { kind: "error", code: errData.error ?? res.status };
+      }
+    } catch (err) {
+      return { kind: "failed", message: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  return { kind: "timeout" };
 }
 
 // --- Helpers ---
