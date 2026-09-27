@@ -5,6 +5,14 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.1](https://github.com/glasshome/widget-cli/compare/v0.14.0...v0.14.1) (2026-09-27)
+
+
+### Bug Fixes
+
+* **deps:** widget-sdk 1.17.1 ([02abb0d](https://github.com/glasshome/widget-cli/commit/02abb0d72c0cf407eaa908407717525929e72d4b))
+* **preview:** the harness loads every font face before it reports ready, so a cold render never captures the fallback ([123f3c9](https://github.com/glasshome/widget-cli/commit/123f3c962cb36e58cddf719c7144e97354ce07a1))
+
 ## [0.14.0](https://github.com/glasshome/widget-cli/compare/v0.13.6...v0.14.0) (2026-09-27)
 
 
