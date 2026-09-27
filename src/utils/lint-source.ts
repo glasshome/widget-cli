@@ -42,7 +42,7 @@ const registryMatchers = deprecations
   .map((d) => ({ entry: d, re: new RegExp(d.sourcePattern as string) }));
 
 /** Scan one widget's source and return deprecation findings. */
-export function lintWidgetSource(cwd: string, widget: string): SourceLintFinding[] {
+function lintWidgetSource(cwd: string, widget: string): SourceLintFinding[] {
   const findings: SourceLintFinding[] = [];
   for (const file of widgetSourceFiles(cwd, widget)) {
     const rel = relative(cwd, file);

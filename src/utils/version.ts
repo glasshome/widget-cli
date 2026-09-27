@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { log } from "@clack/prompts";
@@ -136,7 +136,7 @@ export async function notifyCliUpdate(): Promise<void> {
 }
 
 /** The @glasshome/widget-sdk version this project declares in its package.json. */
-export function getProjectSdkVersion(cwd: string): string | null {
+function getProjectSdkVersion(cwd: string): string | null {
   try {
     const pkg = JSON.parse(readFileSync(join(cwd, "package.json"), "utf-8")) as {
       dependencies?: Record<string, string>;

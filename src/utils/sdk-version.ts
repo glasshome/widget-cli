@@ -48,7 +48,7 @@ export function getInstalledSdkVersion(cwd: string): string | null {
  * The SDK this CLI itself was built against, used when scaffolding a project
  * that has nothing installed yet.
  */
-export function getCliSdkVersion(): string | null {
+function getCliSdkVersion(): string | null {
   try {
     const pkgPath = resolve(import.meta.dir, "../../package.json");
     if (!existsSync(pkgPath)) return null;

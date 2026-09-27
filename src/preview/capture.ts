@@ -19,7 +19,7 @@ interface ShotListEntry {
   size: { w: number; h: number };
 }
 
-export interface Failure {
+interface Failure {
   widget: string;
   kind: "network" | "hang" | "integrity";
   detail: string;

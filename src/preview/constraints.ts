@@ -16,7 +16,7 @@ import { nixLdLibraryPath } from "./nix-ld";
 
 /** Hard wall-clock cap per render. A widget that hangs (camera waiting on a
     stream that will never arrive) must be killed, not allowed to stall the run. */
-export const RENDER_TIMEOUT_MS = 30_000;
+const RENDER_TIMEOUT_MS = 30_000;
 
 export interface EgressLock {
   /**
@@ -40,7 +40,7 @@ export interface EgressLock {
  * closer analogue of the container egress allowlist the worker will actually
  * rely on.
  */
-export const NO_EGRESS_ARGS = [
+const NO_EGRESS_ARGS = [
   "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost",
 ];
 
@@ -97,7 +97,7 @@ export function hashWidgetArtifacts(distDir: string, widget: string): string {
  * time-of-day-dependent widgets (clock, weather, sun-driven energy) land in a
  * flattering, stable state instead of drifting with the run.
  */
-export const FROZEN_TIME = new Date("2026-06-15T12:34:00Z");
+const FROZEN_TIME = new Date("2026-06-15T12:34:00Z");
 
 /**
  * Freeze time, then step it forward deliberately.

@@ -9,7 +9,7 @@ import { Node, type ObjectLiteralExpression, Project, SyntaxKind } from "ts-morp
  * compiles and validates identically. Powered by `bun widget migrate config`.
  */
 
-export interface MigrationWarning {
+interface MigrationWarning {
   field: string;
   reason: string;
 }
