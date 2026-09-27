@@ -54,7 +54,7 @@ export function slug(s: string): string {
  * in light and dark under the render worker's constraints (frozen clock, DNS
  * blackhole, per-render timeout, verify-before-execute hash pin).
  */
-export async function runPreview(opts: PreviewOptions): Promise<PreviewSummary> {
+export async function capturePreviews(opts: PreviewOptions): Promise<PreviewSummary> {
   const projectDir = resolve(opts.projectDir);
   const only = opts.only ?? [];
   const isolate = opts.isolate ?? false;

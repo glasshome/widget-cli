@@ -1,6 +1,6 @@
 import { log } from "@clack/prompts";
 import color from "picocolors";
-import { runPreview as capturePreview } from "../preview/capture";
+import { capturePreviews } from "../preview/capture";
 import { type Box, DEFAULT_SIZES, runSweep, type Theme } from "../preview/sweep";
 import { withQuietStdout } from "../utils/quiet";
 
@@ -32,10 +32,10 @@ export async function runPreview(cwd: string, names: string[], isolate: boolean)
 
   log.info(names.length ? `Previewing ${names.join(", ")}` : "Previewing all widgets");
 
-  let summary: Awaited<ReturnType<typeof capturePreview>>;
+  let summary: Awaited<ReturnType<typeof capturePreviews>>;
   try {
     summary = await withQuietStdout(() =>
-      capturePreview({ projectDir: cwd, only: names, isolate, onProgress: progress }),
+      capturePreviews({ projectDir: cwd, only: names, isolate, onProgress: progress }),
     );
   } catch (err) {
     log.error(err instanceof Error ? err.message : String(err));
