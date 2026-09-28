@@ -11,6 +11,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { cancel, confirm, log, note, spinner, text } from "@clack/prompts";
 import color from "picocolors";
+import { writeAgentStubs } from "../utils/agent-guide";
 import { cancelled } from "../utils/prompt";
 import { defaultSdkRange, FALLBACK_SDK_RANGE } from "../utils/sdk-version";
 import { getCliVersion } from "../utils/version";
@@ -140,6 +141,7 @@ export async function runCreate() {
 
     // Create the first widget in src/{widgetName}/
     scaffoldWidget(targetDir, widgetDetails);
+    writeAgentStubs(targetDir);
 
     s.stop("Widget project created!");
 
