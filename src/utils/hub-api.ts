@@ -115,7 +115,7 @@ export async function confirmPublish(
 export async function uploadToR2(
   uploadUrl: string,
   bundleBuffer: Uint8Array,
-  contentType: string = "application/javascript",
+  contentType = "application/javascript",
 ): Promise<void> {
   const res = await fetch(uploadUrl, {
     method: "PUT",
