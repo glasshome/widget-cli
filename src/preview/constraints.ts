@@ -113,6 +113,14 @@ export async function freezeClock(page: Page): Promise<void> {
 }
 
 /** Advance the frozen clock enough to settle rAF-gated mount animations. */
+export class WidgetCrash extends Error {}
+
+/** Throws when the harness recorded a widget crash during mount. */
+export async function assertNoCrash(page: Page): Promise<void> {
+  const crash = await page.evaluate(() => document.documentElement.dataset.harnessCrash);
+  if (crash) throw new WidgetCrash(`widget crashed: ${crash}`);
+}
+
 export async function settleAnimations(page: Page, ms = 1_000): Promise<void> {
   await page.clock.runFor(ms);
 }

@@ -44,15 +44,16 @@ export async function runPreview(cwd: string, names: string[], isolate: boolean)
 
   const hangs = summary.failures.filter((f) => f.kind === "hang");
   const integrity = summary.failures.filter((f) => f.kind === "integrity");
+  const crashes = summary.failures.filter((f) => f.kind === "crash");
   const networkWidgets = [
     ...new Set(summary.failures.filter((f) => f.kind === "network").map((f) => f.widget)),
   ];
-  const attempted = summary.shots + hangs.length;
+  const attempted = summary.shots + hangs.length + crashes.length;
 
   // Headline: plain count of what landed in preview/. A miss only matters if a
   // render could not complete (hangs) or a bundle changed under us (integrity).
   const out = color.cyan("preview/");
-  if (hangs.length || integrity.length) {
+  if (hangs.length || integrity.length || crashes.length) {
     log.warn(`Rendered ${summary.shots} of ${attempted} previews into ${out}`);
   } else {
     log.success(`Rendered ${summary.shots} previews (light + dark) into ${out}`);
@@ -60,6 +61,13 @@ export async function runPreview(cwd: string, names: string[], isolate: boolean)
 
   if (summary.skipped.length) {
     log.message(color.dim(`No examples to render: ${summary.skipped.join(", ")}`));
+  }
+
+  if (crashes.length) {
+    log.error(
+      `Widget crashed (no image written):\n` +
+        crashes.map((f) => `  · ${f.widget}  ${f.detail}`).join("\n"),
+    );
   }
 
   // Real miss: a render still too slow after one retry. Its slot is left without
@@ -95,7 +103,7 @@ export async function runPreview(cwd: string, names: string[], isolate: boolean)
   // Vite's dev server leaves live handles behind (file watchers, keep-alive
   // sockets from browsers that crashed mid-render), so the process would sit
   // idle forever after the verdict instead of exiting. Leave deliberately.
-  process.exit(hangs.length || integrity.length ? 1 : 0);
+  process.exit(hangs.length || integrity.length || crashes.length ? 1 : 0);
 }
 
 export interface SweepFlags {

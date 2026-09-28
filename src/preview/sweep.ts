@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import type { Page } from "playwright";
 import { slug } from "./capture";
 import {
+  assertNoCrash,
   freezeClock,
   settleAnimations,
   watchEgress,
@@ -103,6 +104,7 @@ export async function runSweep(opts: SweepOptions): Promise<SweepSummary> {
       timeout: 20_000,
     });
     await settleAnimations(page);
+    await assertNoCrash(page);
     if (opts.click) {
       // Playwright's actionability checks wait on animation frames, which a frozen clock never runs.
       await page.clock.resume();

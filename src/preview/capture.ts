@@ -5,6 +5,8 @@ import {
   hashWidgetArtifacts,
   settleAnimations,
   type SharedBrowser,
+  WidgetCrash,
+  assertNoCrash,
   watchEgress,
   withFreshBrowser,
   withRenderTimeout,
@@ -21,7 +23,7 @@ interface ShotListEntry {
 
 interface Failure {
   widget: string;
-  kind: "network" | "hang" | "integrity";
+  kind: "network" | "hang" | "integrity" | "crash";
   detail: string;
 }
 
@@ -134,6 +136,7 @@ export async function capturePreviews(opts: PreviewOptions): Promise<PreviewSumm
               });
               // Fire rAF-gated mount animations before capturing.
               await settleAnimations(page);
+              await assertNoCrash(page);
               await page.locator("#stage").screenshot({ path: file, omitBackground: true });
               for (const a of lock.attempts) widgetAttempts.add(a);
             };
@@ -162,15 +165,23 @@ export async function capturePreviews(opts: PreviewOptions): Promise<PreviewSumm
             // browser is why it stalled) and give it one clean retry before
             // recording a miss.
             let ok = false;
-            for (let tries = 0; tries < 2 && !ok; tries++) {
+            let crash: WidgetCrash | null = null;
+            for (let tries = 0; tries < 2 && !ok && !crash; tries++) {
               try {
                 await attempt();
                 ok = true;
-              } catch {
-                await shared?.recycle().catch(() => {});
+              } catch (err) {
+                if (err instanceof WidgetCrash) crash = err;
+                else await shared?.recycle().catch(() => {});
               }
             }
             if (ok) shot++;
+            else if (crash)
+              failures.push({
+                widget,
+                kind: "crash",
+                detail: `${label} (${theme}): ${crash.message}`,
+              });
             else failures.push({ widget, kind: "hang", detail: `${label} (${theme})` });
           }
         }
