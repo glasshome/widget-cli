@@ -48,7 +48,9 @@ describe("migrateConfigSource, field kinds", () => {
     expect(r.warnings).toEqual([]);
     expect(r.code).toContain("analogOptions: field.group({");
     expect(r.code).toContain('border: field.toggle({ title: "Show Border", default: false }),');
-    expect(r.code).toContain('ticks: field.choice(["none", "hour"], { title: "Tick Marks", default: "hour" }),');
+    expect(r.code).toContain(
+      'ticks: field.choice(["none", "hour"], { title: "Tick Marks", default: "hour" }),',
+    );
     expect(r.code).toContain('}, { title: "Analog Options" }),');
   });
 

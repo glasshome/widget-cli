@@ -75,7 +75,9 @@ export async function runPublish(
   if (options?.scope) {
     const match = scopes.find((s) => s.name === options.scope);
     if (!match) {
-      log.error(`Scope @${options.scope} not found. Available: ${scopes.map((s) => s.name).join(", ")}`);
+      log.error(
+        `Scope @${options.scope} not found. Available: ${scopes.map((s) => s.name).join(", ")}`,
+      );
       process.exit(1);
     }
     scope = match.name;
@@ -145,7 +147,9 @@ export async function runPublish(
   let bump: string;
   if (options?.bump) {
     bump = options.bump;
-    log.info(`Version: ${currentVersion} → ${bump === "keep" ? currentVersion : semver.inc(currentVersion, bump as semver.ReleaseType) ?? currentVersion}`);
+    log.info(
+      `Version: ${currentVersion} → ${bump === "keep" ? currentVersion : (semver.inc(currentVersion, bump as semver.ReleaseType) ?? currentVersion)}`,
+    );
   } else {
     const choice = await select({
       message: `${manifest.name} version: ${currentVersion}. Bump?`,
@@ -246,9 +250,7 @@ export async function runPublish(
       version,
       bundleSize: bundleBuffer.byteLength,
       sha256Hash,
-      ...(cssBuffer && cssSha256Hash
-        ? { cssSize: cssBuffer.byteLength, cssSha256Hash }
-        : {}),
+      ...(cssBuffer && cssSha256Hash ? { cssSize: cssBuffer.byteLength, cssSha256Hash } : {}),
       manifestJson: JSON.stringify(builtManifest),
     });
   } catch (err) {

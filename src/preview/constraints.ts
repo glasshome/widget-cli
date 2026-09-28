@@ -40,9 +40,7 @@ export interface EgressLock {
  * closer analogue of the container egress allowlist the worker will actually
  * rely on.
  */
-const NO_EGRESS_ARGS = [
-  "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost",
-];
+const NO_EGRESS_ARGS = ["--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost"];
 
 /** `CHROMIUM_PATH` points at a system Chromium where Playwright's own build is absent or cannot run. */
 const launchLocked = () =>
@@ -163,12 +161,10 @@ const CONTEXT_OPTIONS = { deviceScaleFactor: 2, reducedMotion: "reduce" } as con
 async function hardClose(browser: Browser): Promise<void> {
   // `process()` exists at runtime on a launched Chromium but is absent from the
   // base Browser type; narrow it here rather than at the call site.
-  const proc = (browser as Browser & { process?: () => { kill: (s: string) => void } | null })
-    .process?.();
-  await Promise.race([
-    browser.close().catch(() => {}),
-    new Promise((r) => setTimeout(r, 3_000)),
-  ]);
+  const proc = (
+    browser as Browser & { process?: () => { kill: (s: string) => void } | null }
+  ).process?.();
+  await Promise.race([browser.close().catch(() => {}), new Promise((r) => setTimeout(r, 3_000))]);
   proc?.kill("SIGKILL");
 }
 
@@ -230,7 +226,9 @@ export async function withSharedBrowser<T>(fn: (browser: SharedBrowser) => Promi
  * The worker must not reuse a process across widgets — one widget's residue
  * (globals, caches, service workers) must never reach another's shot.
  */
-export async function withFreshBrowser<T>(fn: (page: Page, browser: Browser) => Promise<T>): Promise<T> {
+export async function withFreshBrowser<T>(
+  fn: (page: Page, browser: Browser) => Promise<T>,
+): Promise<T> {
   // On NixOS the Playwright-downloaded Chromium can't find its system libs;
   // point nix-ld at them so the bundled browser launches unmodified.
   applyNixLdOnce();

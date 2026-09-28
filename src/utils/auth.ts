@@ -35,9 +35,7 @@ function ensureDir(): void {
 function readAuthFile(): StoredAuthFile {
   if (!existsSync(AUTH_FILE)) return { hosts: {} };
   try {
-    const raw = JSON.parse(readFileSync(AUTH_FILE, "utf-8")) as
-      | StoredAuthFile
-      | LegacyStoredAuth;
+    const raw = JSON.parse(readFileSync(AUTH_FILE, "utf-8")) as StoredAuthFile | LegacyStoredAuth;
     // Migrate legacy format (hub-only, no hosts key)
     if ("accessToken" in raw) {
       return { hub: raw as HubAuth, hosts: {} };

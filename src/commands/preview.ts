@@ -18,7 +18,9 @@ async function requirePlaywright(): Promise<void> {
     await import("playwright");
   } catch {
     log.error("Preview needs Playwright + a Chromium build, which are not installed.");
-    log.info(`Install them with:\n  ${color.bold("bun add -d playwright && bunx playwright install chromium")}`);
+    log.info(
+      `Install them with:\n  ${color.bold("bun add -d playwright && bunx playwright install chromium")}`,
+    );
     process.exit(1);
   }
 }
@@ -125,7 +127,10 @@ function parseSizes(value: string | boolean | undefined): Box[] {
     .split(",")
     .map((s) => {
       const m = s.trim().match(/^(\d+)x(\d+)$/);
-      if (!m) fail(`--sizes takes grid, or WIDTHxHEIGHT pairs in pixels like 150x156,340x242 (got "${s}")`);
+      if (!m)
+        fail(
+          `--sizes takes grid, or WIDTHxHEIGHT pairs in pixels like 150x156,340x242 (got "${s}")`,
+        );
       return { width: Number(m[1]), height: Number(m[2]) };
     });
 }
@@ -133,7 +138,8 @@ function parseSizes(value: string | boolean | undefined): Box[] {
 function parseThemes(value: string | undefined): Theme[] {
   if (!value) return ["light", "dark"];
   const themes = value.split(",");
-  for (const t of themes) if (t !== "light" && t !== "dark") fail(`--theme is light, dark or both (got "${t}")`);
+  for (const t of themes)
+    if (t !== "light" && t !== "dark") fail(`--theme is light, dark or both (got "${t}")`);
   return themes as Theme[];
 }
 
@@ -151,12 +157,18 @@ function parseConfig(value: string | undefined): Record<string, unknown> | undef
  * overridden, into `<project>/preview/sweep/`, plus a contact sheet per example
  * and theme when several sizes are rendered.
  */
-export async function runSweepPreview(cwd: string, names: string[], flags: SweepFlags): Promise<void> {
+export async function runSweepPreview(
+  cwd: string,
+  names: string[],
+  flags: SweepFlags,
+): Promise<void> {
   await requirePlaywright();
   const at = flags.at ? new Date(flags.at) : undefined;
-  if (at && Number.isNaN(at.getTime())) fail(`--at takes an ISO time like 2026-06-15T21:00:00 (got "${flags.at}")`);
+  if (at && Number.isNaN(at.getTime()))
+    fail(`--at takes an ISO time like 2026-06-15T21:00:00 (got "${flags.at}")`);
   const examples = flags.example ? flags.example.split(",").map(Number) : [];
-  if (examples.some((n) => !Number.isInteger(n) || n < 0)) fail("--example takes example numbers, starting at 0");
+  if (examples.some((n) => !Number.isInteger(n) || n < 0))
+    fail("--example takes example numbers, starting at 0");
 
   const summary = await withQuietStdout(() =>
     runSweep({

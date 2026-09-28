@@ -114,15 +114,18 @@ describe("runTypecheck", () => {
     expect(result.reason).toContain("not installed");
   });
 
-  test.skipIf(noTypescript)("uses an ancestor's typescript, as hoisted and workspace installs give", () => {
-    // Requiring a copy inside the project itself would skip every monorepo.
-    const parent = project({ typescript: true });
-    const child = join(parent, "nested");
-    mkdirSync(join(child, "src"), { recursive: true });
-    cpSync(join(parent, "package.json"), join(child, "package.json"));
-    cpSync(join(parent, "tsconfig.json"), join(child, "tsconfig.json"));
-    writeFileSync(join(child, "src", "index.ts"), `export const n: number = "nope";\n`);
+  test.skipIf(noTypescript)(
+    "uses an ancestor's typescript, as hoisted and workspace installs give",
+    () => {
+      // Requiring a copy inside the project itself would skip every monorepo.
+      const parent = project({ typescript: true });
+      const child = join(parent, "nested");
+      mkdirSync(join(child, "src"), { recursive: true });
+      cpSync(join(parent, "package.json"), join(child, "package.json"));
+      cpSync(join(parent, "tsconfig.json"), join(child, "tsconfig.json"));
+      writeFileSync(join(child, "src", "index.ts"), `export const n: number = "nope";\n`);
 
-    expect(runTypecheck(child).status).toBe("failed");
-  });
+      expect(runTypecheck(child).status).toBe("failed");
+    },
+  );
 });

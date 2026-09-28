@@ -115,8 +115,7 @@ export async function runCreate() {
       rmSync(oldSrcIndex);
     }
 
-    const projectDesc =
-      projectDescription || `A GlassHome widget project: ${projectName}`;
+    const projectDesc = projectDescription || `A GlassHome widget project: ${projectName}`;
 
     // Replace project-level placeholders in package.json. Pin the CLI to the
     // version that scaffolded the project (caret) so `bun widget` resolves the

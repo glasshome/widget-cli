@@ -135,7 +135,9 @@ export async function runSweep(opts: SweepOptions): Promise<SweepSummary> {
             state: "attached",
             timeout: 30_000,
           });
-          examples = JSON.parse((await probe.getAttribute("html", "data-harness-examples")) ?? "[]");
+          examples = JSON.parse(
+            (await probe.getAttribute("html", "data-harness-examples")) ?? "[]",
+          );
           bounds = JSON.parse((await probe.getAttribute("html", "data-harness-bounds")) ?? "null");
         } finally {
           await probe.context().close();
@@ -187,7 +189,12 @@ export async function runSweep(opts: SweepOptions): Promise<SweepSummary> {
             if (shot.length > 1) {
               const page = await browser.newPage();
               try {
-                await writeSheet(page, theme, shot, resolve(outDir, `${widget}-${label}-${theme}.png`));
+                await writeSheet(
+                  page,
+                  theme,
+                  shot,
+                  resolve(outDir, `${widget}-${label}-${theme}.png`),
+                );
                 sheets++;
               } finally {
                 await page

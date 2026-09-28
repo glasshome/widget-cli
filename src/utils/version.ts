@@ -107,10 +107,7 @@ async function getLatestVersions(): Promise<{ cli: string | null; sdk: string | 
   if (cache && now - cache.lastCheck < UPDATE_CHECK_INTERVAL_MS) {
     return { cli: cache.cli, sdk: cache.sdk };
   }
-  const [cli, sdk] = await Promise.all([
-    fetchLatestVersion(CLI_PKG),
-    fetchLatestVersion(SDK_PKG),
-  ]);
+  const [cli, sdk] = await Promise.all([fetchLatestVersion(CLI_PKG), fetchLatestVersion(SDK_PKG)]);
   const merged = { cli: cli ?? cache?.cli ?? null, sdk: sdk ?? cache?.sdk ?? null };
   writeUpdateCache({ lastCheck: now, ...merged });
   return merged;

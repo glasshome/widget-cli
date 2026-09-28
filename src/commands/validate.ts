@@ -41,7 +41,11 @@ function validateManifest(manifest: WidgetManifest, installedSdk: string | null)
   if (!schemaResult.success) {
     errors.push(`Manifest schema: ${formatSchemaError(schemaResult.error)}`);
     const capabilities = (manifest as { capabilities?: unknown }).capabilities;
-    if (manifest.sdkVersion && requiresCapabilities(manifest.sdkVersion) && capabilities === undefined) {
+    if (
+      manifest.sdkVersion &&
+      requiresCapabilities(manifest.sdkVersion) &&
+      capabilities === undefined
+    ) {
       errors.push(
         `sdkVersion "${manifest.sdkVersion}" only admits SDK >= 1.0.0, so manifest.json must declare "capabilities", use [] if the widget never reads or controls Home Assistant`,
       );

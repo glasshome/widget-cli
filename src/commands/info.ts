@@ -62,7 +62,9 @@ export async function runInfo(cwd: string, widgetName?: string): Promise<void> {
 
       note(lines.join("\n"), `${manifest.name} ${color.dim(`(${name})`)}`);
     } catch (err) {
-      log.warn(`${name}: could not read manifest: ${err instanceof Error ? err.message : String(err)}`);
+      log.warn(
+        `${name}: could not read manifest: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 

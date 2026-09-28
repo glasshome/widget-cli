@@ -201,9 +201,7 @@ async function authorizeThisDevice(api: string, host: string, s: Spinner): Promi
   s.stop("Authorization code ready");
   log.info(`Open in browser: ${grant.verificationUriComplete}`);
   log.info(`Device code: ${grant.userCode}`);
-  await import("open")
-    .then((m) => m.default(grant.verificationUriComplete))
-    .catch(() => {});
+  await import("open").then((m) => m.default(grant.verificationUriComplete)).catch(() => {});
 
   s.start("Waiting for authorization (approve in your browser)...");
   const outcome = await pollDeviceToken(api, grant);
@@ -217,11 +215,7 @@ async function authorizeThisDevice(api: string, host: string, s: Spinner): Promi
   return outcome.token;
 }
 
-async function obtainToken(
-  api: string,
-  opts: { reAuth?: boolean },
-  s: Spinner,
-): Promise<string> {
+async function obtainToken(api: string, opts: { reAuth?: boolean }, s: Spinner): Promise<string> {
   const host = extractHost(api);
   if (opts.reAuth) {
     clearHostToken(host);
@@ -410,7 +404,9 @@ export async function runConnect(
   const api = apiUrl.replace(/\/$/, "");
   const token = await obtainToken(api, opts, s);
   if (!token) {
-    log.warn("Authentication failed, widgets won't be connected. Log in at the dashboard first, then restart.");
+    log.warn(
+      "Authentication failed, widgets won't be connected. Log in at the dashboard first, then restart.",
+    );
     return;
   }
 
