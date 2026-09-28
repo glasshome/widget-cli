@@ -1,7 +1,6 @@
 import { log } from "@clack/prompts";
 import color from "picocolors";
-import { capturePreviews } from "../preview/capture";
-import { type Box, DEFAULT_SIZES, runSweep, type Theme } from "../preview/sweep";
+import type { Box, Theme } from "../preview/sweep";
 import { withQuietStdout } from "../utils/quiet";
 
 /**
@@ -9,9 +8,7 @@ import { withQuietStdout } from "../utils/quiet";
  * `<project>/preview/`, rendered through the same constraints as the hub's
  * render worker: frozen clock, DNS blackhole, per-render timeout, hash pin.
  *
- * Playwright is an OPTIONAL peer — the CLI stays Chromium-free by default — so
- * detect it first and give an actionable install hint rather than a raw
- * module-not-found when it is absent.
+ * Playwright is an optional peer: check for it before importing anything that loads it.
  */
 async function requirePlaywright(): Promise<void> {
   try {
@@ -31,6 +28,7 @@ const progress = (m: string) => {
 
 export async function runPreview(cwd: string, names: string[], isolate: boolean): Promise<void> {
   await requirePlaywright();
+  const { capturePreviews } = await import("../preview/capture");
 
   log.info(names.length ? `Previewing ${names.join(", ")}` : "Previewing all widgets");
 
@@ -120,9 +118,9 @@ function fail(message: string): never {
   process.exit(1);
 }
 
-function parseSizes(value: string | boolean | undefined): Box[] {
+function parseSizes(value: string | boolean | undefined, grid: Box[]): Box[] {
   if (value === undefined) return [];
-  if (value === "grid") return DEFAULT_SIZES;
+  if (value === "grid") return grid;
   return String(value)
     .split(",")
     .map((s) => {
@@ -163,6 +161,7 @@ export async function runSweepPreview(
   flags: SweepFlags,
 ): Promise<void> {
   await requirePlaywright();
+  const { DEFAULT_SIZES, runSweep } = await import("../preview/sweep");
   const at = flags.at ? new Date(flags.at) : undefined;
   if (at && Number.isNaN(at.getTime()))
     fail(`--at takes an ISO time like 2026-06-15T21:00:00 (got "${flags.at}")`);
@@ -176,7 +175,7 @@ export async function runSweepPreview(
       only: names,
       themes: parseThemes(flags.theme),
       examples,
-      sizes: parseSizes(flags.sizes),
+      sizes: parseSizes(flags.sizes, DEFAULT_SIZES),
       at,
       config: parseConfig(flags.config),
       services: flags.service ?? [],
