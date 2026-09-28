@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join, resolve } from "node:path";
 
 const GUIDE_PATH = "node_modules/@glasshome/widget-sdk/guide/widgets.md";
 const START = "<!-- glasshome-widget:start -->";
@@ -53,13 +54,28 @@ function writeAgents(projectDir: string): StubResult {
   const current = readFileSync(path, "utf-8");
   const start = current.indexOf(START);
   const end = current.indexOf(END);
+  if (start !== -1 && end < start) return "kept";
   const next =
-    start !== -1 && end > start
+    start !== -1
       ? current.slice(0, start) + agentsBlock + current.slice(end + END.length)
       : `${current.trimEnd()}\n\n${agentsBlock}\n`;
   if (next === current) return "kept";
   writeFileSync(path, next);
   return "updated";
+}
+
+/** The guide the installed SDK ships, or null when the SDK predates it. */
+export function installedGuide(projectDir: string): string | null {
+  try {
+    const require = createRequire(resolve(projectDir, "package.json"));
+    const guide = join(
+      dirname(require.resolve("@glasshome/widget-sdk/package.json")),
+      "guide/widgets.md",
+    );
+    return existsSync(guide) ? guide : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Point coding agents (Claude skill, AGENTS.md) at the guide the installed SDK ships. */

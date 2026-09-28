@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { log, spinner } from "@clack/prompts";
-import { writeAgentStubs } from "../utils/agent-guide";
+import { installedGuide, writeAgentStubs } from "../utils/agent-guide";
 import { discoverWidgets, readManifest, writeManifest } from "../utils/manifest";
 import { getInstalledSdkVersion } from "../utils/sdk-version";
 import { runValidate } from "./validate";
@@ -47,6 +47,11 @@ function refreshAgentStubs(cwd: string): void {
   const { skill, agents } = writeAgentStubs(cwd);
   if (skill !== "kept" || agents !== "kept") {
     log.info("Pointed your coding agent at the SDK's widget guide (.claude/skills, AGENTS.md)");
+  }
+  if (!installedGuide(cwd)) {
+    log.warn(
+      "The installed @glasshome/widget-sdk has no widget guide yet; your agent needs SDK 1.19 or later.",
+    );
   }
 }
 

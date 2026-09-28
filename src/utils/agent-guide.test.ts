@@ -50,6 +50,14 @@ describe("writeAgentStubs", () => {
     expect(readFileSync(join(dir, "AGENTS.md"), "utf-8")).toBe(once);
   });
 
+  test("an AGENTS.md whose block lost its end marker is left alone", () => {
+    const dir = project();
+    const broken = "# Mine\n\n<!-- glasshome-widget:start -->\nhalf a block\n\nMore of mine.\n";
+    writeFileSync(join(dir, "AGENTS.md"), broken);
+    expect(writeAgentStubs(dir).agents).toBe("kept");
+    expect(readFileSync(join(dir, "AGENTS.md"), "utf-8")).toBe(broken);
+  });
+
   test("a skill the author took over (marker removed) is left alone", () => {
     const dir = project();
     mkdirSync(join(dir, ".claude/skills/glasshome-widget"), { recursive: true });
