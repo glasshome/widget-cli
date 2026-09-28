@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { log, spinner } from "@clack/prompts";
+import { installedGuide, writeAgentStubs } from "../utils/agent-guide";
 import { discoverWidgets, readManifest, writeManifest } from "../utils/manifest";
 import { getInstalledSdkVersion } from "../utils/sdk-version";
 import { runValidate } from "./validate";
@@ -40,6 +41,18 @@ function findWorkspaceSdkVersion(monorepoRoot: string): string | null {
     }
   }
   return null;
+}
+
+function refreshAgentStubs(cwd: string): void {
+  const { skill, agents } = writeAgentStubs(cwd);
+  if (skill !== "kept" || agents !== "kept") {
+    log.info("Pointed your coding agent at the SDK's widget guide (.claude/skills, AGENTS.md)");
+  }
+  if (!installedGuide(cwd)) {
+    log.warn(
+      "The installed @glasshome/widget-sdk has no widget guide yet; your agent needs SDK 1.19 or later.",
+    );
+  }
 }
 
 /** Update sdkVersion in all manifest.json files. */
@@ -136,6 +149,7 @@ export async function runUpgrade(cwd: string, options: UpgradeOptions = {}): Pro
       log.success(`Already up to date with workspace SDK (${sdkVersion})`);
       // Still sync manifests in case they're out of date
       syncManifestSdkVersions(cwd, sdkVersion);
+      refreshAgentStubs(cwd);
       return;
     }
 
@@ -153,6 +167,7 @@ export async function runUpgrade(cwd: string, options: UpgradeOptions = {}): Pro
 
     // Sync sdkVersion in all manifest.json files
     syncManifestSdkVersions(cwd, sdkVersion);
+    refreshAgentStubs(cwd);
 
     // Run validate to check compatibility
     log.info("Checking compatibility...");
@@ -176,6 +191,7 @@ export async function runUpgrade(cwd: string, options: UpgradeOptions = {}): Pro
     return;
   }
   syncManifestSdkVersions(cwd, installed);
+  refreshAgentStubs(cwd);
   const valid = await runValidate(cwd);
   if (valid) {
     log.success(`Upgraded to @glasshome/widget-sdk@${installed}`);

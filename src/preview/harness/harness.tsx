@@ -141,6 +141,14 @@ FROST_SHEET.replaceSync(
 const UI_SHEET = new CSSStyleSheet();
 UI_SHEET.replaceSync(uiCss);
 
+/** Read by the capture driver, so a widget that throws fails the render instead of saving a blank shot. */
+function reportCrash(err: unknown): void {
+  document.documentElement.dataset.harnessCrash =
+    err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+}
+addEventListener("error", (e) => reportCrash(e.error ?? e.message));
+addEventListener("unhandledrejection", (e) => reportCrash(e.reason));
+
 /** Mount via the shared SDK recipe (`@glasshome/widget-sdk/host`): closed shadow
     root, injected tokens, adopted widget CSS, WidgetCtx provider, `dark`
     mirrored onto the host. `dark` is the default `mirrorClasses`; the `dark`
@@ -158,7 +166,10 @@ function mount(
     ctx,
     cssText,
     extraSheets: [UI_SHEET, FROST_SHEET],
-    onCrash: (err) => console.error("[harness] widget threw:", err),
+    onCrash: (err) => {
+      console.error("[harness] widget threw:", err);
+      reportCrash(err);
+    },
   });
 }
 

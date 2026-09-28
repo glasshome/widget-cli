@@ -73,6 +73,8 @@ export async function serveHarness(
     // build and dash mount). tailwindcss() compiles @glasshome/ui/styles so the
     // app theme tokens land on :root exactly as they do in dash.
     plugins: [tailwindcss(), solid({ solid: { delegateEvents: false } })],
+    // ui resolves to its Solid source; prebundling would compile that JSX as React unless ui is a direct dependency.
+    optimizeDeps: { exclude: ["@glasshome/ui"] },
     server: { fs: { allow: [tempRoot, ...ancestors(projectDir)] } },
   });
 

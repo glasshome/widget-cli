@@ -1,7 +1,6 @@
 import { log } from "@clack/prompts";
 import color from "picocolors";
-import { capturePreviews } from "../preview/capture";
-import { type Box, DEFAULT_SIZES, runSweep, type Theme } from "../preview/sweep";
+import type { Box, Theme } from "../preview/sweep";
 import { withQuietStdout } from "../utils/quiet";
 
 /**
@@ -9,9 +8,7 @@ import { withQuietStdout } from "../utils/quiet";
  * `<project>/preview/`, rendered through the same constraints as the hub's
  * render worker: frozen clock, DNS blackhole, per-render timeout, hash pin.
  *
- * Playwright is an OPTIONAL peer — the CLI stays Chromium-free by default — so
- * detect it first and give an actionable install hint rather than a raw
- * module-not-found when it is absent.
+ * Playwright is an optional peer: check for it before importing anything that loads it.
  */
 async function requirePlaywright(): Promise<void> {
   try {
@@ -31,6 +28,7 @@ const progress = (m: string) => {
 
 export async function runPreview(cwd: string, names: string[], isolate: boolean): Promise<void> {
   await requirePlaywright();
+  const { capturePreviews } = await import("../preview/capture");
 
   log.info(names.length ? `Previewing ${names.join(", ")}` : "Previewing all widgets");
 
@@ -46,15 +44,16 @@ export async function runPreview(cwd: string, names: string[], isolate: boolean)
 
   const hangs = summary.failures.filter((f) => f.kind === "hang");
   const integrity = summary.failures.filter((f) => f.kind === "integrity");
+  const crashes = summary.failures.filter((f) => f.kind === "crash");
   const networkWidgets = [
     ...new Set(summary.failures.filter((f) => f.kind === "network").map((f) => f.widget)),
   ];
-  const attempted = summary.shots + hangs.length;
+  const attempted = summary.shots + hangs.length + crashes.length;
 
   // Headline: plain count of what landed in preview/. A miss only matters if a
   // render could not complete (hangs) or a bundle changed under us (integrity).
   const out = color.cyan("preview/");
-  if (hangs.length || integrity.length) {
+  if (hangs.length || integrity.length || crashes.length) {
     log.warn(`Rendered ${summary.shots} of ${attempted} previews into ${out}`);
   } else {
     log.success(`Rendered ${summary.shots} previews (light + dark) into ${out}`);
@@ -62,6 +61,13 @@ export async function runPreview(cwd: string, names: string[], isolate: boolean)
 
   if (summary.skipped.length) {
     log.message(color.dim(`No examples to render: ${summary.skipped.join(", ")}`));
+  }
+
+  if (crashes.length) {
+    log.error(
+      `Widget crashed (no image written):\n` +
+        crashes.map((f) => `  · ${f.widget}  ${f.detail}`).join("\n"),
+    );
   }
 
   // Real miss: a render still too slow after one retry. Its slot is left without
@@ -97,7 +103,7 @@ export async function runPreview(cwd: string, names: string[], isolate: boolean)
   // Vite's dev server leaves live handles behind (file watchers, keep-alive
   // sockets from browsers that crashed mid-render), so the process would sit
   // idle forever after the verdict instead of exiting. Leave deliberately.
-  process.exit(hangs.length || integrity.length ? 1 : 0);
+  process.exit(hangs.length || integrity.length || crashes.length ? 1 : 0);
 }
 
 export interface SweepFlags {
@@ -120,9 +126,9 @@ function fail(message: string): never {
   process.exit(1);
 }
 
-function parseSizes(value: string | boolean | undefined): Box[] {
+function parseSizes(value: string | boolean | undefined, grid: Box[]): Box[] {
   if (value === undefined) return [];
-  if (value === "grid") return DEFAULT_SIZES;
+  if (value === "grid") return grid;
   return String(value)
     .split(",")
     .map((s) => {
@@ -163,6 +169,7 @@ export async function runSweepPreview(
   flags: SweepFlags,
 ): Promise<void> {
   await requirePlaywright();
+  const { DEFAULT_SIZES, runSweep } = await import("../preview/sweep");
   const at = flags.at ? new Date(flags.at) : undefined;
   if (at && Number.isNaN(at.getTime()))
     fail(`--at takes an ISO time like 2026-06-15T21:00:00 (got "${flags.at}")`);
@@ -176,7 +183,7 @@ export async function runSweepPreview(
       only: names,
       themes: parseThemes(flags.theme),
       examples,
-      sizes: parseSizes(flags.sizes),
+      sizes: parseSizes(flags.sizes, DEFAULT_SIZES),
       at,
       config: parseConfig(flags.config),
       services: flags.service ?? [],

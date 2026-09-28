@@ -45,17 +45,15 @@ export function scaffoldWidget(
   srcContent = srcContent.replace(/SDK_RANGE/g, sdkRange);
   writeFileSync(resolve(widgetDir, "index.tsx"), srcContent);
 
-  // Generate manifest.json. `capabilities` is required for any SDK >= 1.0.0
-  // range and an empty array is the honest default: a fresh widget reads
-  // nothing from Home Assistant, and the declaration is what consent shows.
+  // Matches the template's inline manifest: it reads one sensor.
   const manifest = {
     name: displayName,
     description: widgetDescription,
     minSize: { w: 1, h: 1 },
-    maxSize: { w: 4, h: 4 },
+    maxSize: { w: 8, h: 8 },
     defaultSize: { w: 2, h: 2 },
     sdkVersion: sdkRange,
-    capabilities: [],
+    capabilities: [{ domain: "sensor", access: "read" }],
     version: "0.1.0",
   };
   writeFileSync(resolve(widgetDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
@@ -99,7 +97,10 @@ export async function promptWidgetDetails(defaults?: { widgetName?: string }): P
   };
 }
 
-export async function runAdd(cwd: string): Promise<void> {
+export async function runAdd(
+  cwd: string,
+  flags: { name?: string; description?: string } = {},
+): Promise<void> {
   // Verify project structure
   const srcDir = resolve(cwd, "src");
   if (!existsSync(srcDir)) {
@@ -107,8 +108,14 @@ export async function runAdd(cwd: string): Promise<void> {
     process.exit(1);
   }
 
-  const details = await promptWidgetDetails();
+  const details = flags.name
+    ? { widgetName: flags.name, description: flags.description ?? "" }
+    : await promptWidgetDetails();
   if (!details) process.exit(0);
+  if (!/^[a-z][a-z0-9-]*$/.test(details.widgetName)) {
+    log.error("--name must be lowercase letters, digits and hyphens, starting with a letter.");
+    process.exit(1);
+  }
 
   const widgetDir = resolve(srcDir, details.widgetName);
   if (existsSync(widgetDir)) {
