@@ -6,11 +6,11 @@ const START = "<!-- glasshome-widget:start -->";
 const END = "<!-- glasshome-widget:end -->";
 const SKILL_FILE = ".claude/skills/glasshome-widget/SKILL.md";
 
-const pointer = `Before building, styling or reviewing a widget in this project, read \`${GUIDE_PATH}\` in full (in a workspace it may sit in an ancestor's \`node_modules\`). It ships with the installed \`@glasshome/widget-sdk\`, so it always matches the SDK this project builds against, and it wins over anything you remember about GlassHome widgets. \`bun widget upgrade\` moves the SDK and this guide forward together.`;
+const pointer = `Read \`${GUIDE_PATH}\` (or an ancestor's \`node_modules\`) before working on a widget. It matches the installed SDK; \`bun widget upgrade\` updates both.`;
 
 const skill = `---
 name: glasshome-widget
-description: Use when building, styling, or reviewing a GlassHome widget in this project, or when a widget should look like the official GlassHome widgets.
+description: Use when building, styling, previewing or reviewing a GlassHome widget in this project.
 ---
 
 # GlassHome widgets
@@ -18,7 +18,7 @@ description: Use when building, styling, or reviewing a GlassHome widget in this
 ${pointer}
 
 ${START}
-Written by the GlassHome widget CLI; it rewrites this file on \`bun widget upgrade\`. Delete this marker block to keep your own edits.
+Managed by \`bun widget upgrade\`. Delete this block to own the file.
 ${END}
 `;
 
