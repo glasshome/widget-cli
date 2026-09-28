@@ -1,49 +1,122 @@
-import { defineWidget } from "@glasshome/widget-sdk";
-import { type Component, createSignal } from "solid-js";
+import {
+  Button,
+  defineConfig,
+  defineWidget,
+  field,
+  Icon,
+  type Infer,
+  ResponsiveDialog,
+  ResponsiveDialogBody,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  SchemaForm,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  useEntity,
+  useWidgetContext,
+  useWidgetDialog,
+  Widget,
+  WidgetDialog,
+} from "@glasshome/widget-sdk";
+import { Show } from "solid-js";
 
-interface WidgetConfig {
-  label: string;
-}
+const configSchema = defineConfig({
+  title: field.title(),
+  entityIds: field.entity("sensor"),
+});
 
-const WIDGET_NAMEWidget: Component<{ config: WidgetConfig }> = (props) => {
-  const [count, setCount] = createSignal(0);
+type WidgetConfig = Infer<typeof configSchema>;
+
+const dialogParts = {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogDescription,
+  ResponsiveDialogBody,
+  ResponsiveDialogFooter,
+  Button,
+  SchemaForm,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} as const;
+
+function WIDGET_NAMEWidget(props: { config: WidgetConfig }) {
+  const ctx = useWidgetContext();
+  const { setShowDialog, dialogProps } = useWidgetDialog();
+  const entity = useEntity(() => props.config.entityIds[0] ?? "");
+
+  const name = () => props.config.title || entity()?.friendlyName || "WIDGET_NAME";
 
   return (
-    <div class="flex h-full w-full flex-col items-center justify-center gap-3">
-      <h3 class="text-sm font-medium text-muted-foreground">
-        {props.config.label || "WIDGET_NAME"}
-      </h3>
-      <p class="text-4xl font-bold">{count()}</p>
-      <button
-        type="button"
-        onClick={() => setCount((c) => c + 1)}
-        class="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+    <>
+      <Widget
+        variant="classic-glass"
+        tone="info"
+        emptyState={
+          entity()
+            ? undefined
+            : {
+                icon: <Icon icon="mdi:gauge" width={32} />,
+                title: "No sensor",
+                message: "Hold to configure",
+              }
+        }
       >
-        Increment
-      </button>
-    </div>
+        <Show when={entity()}>
+          {(e) => (
+            <Widget.Content>
+              <Widget.Glyph icon="mdi:gauge" />
+              <Widget.Head icon="mdi:gauge" name={name()} active />
+              <Widget.Hero value={e().state} unit={e().unitOfMeasurement ?? undefined} />
+            </Widget.Content>
+          )}
+        </Show>
+      </Widget>
+      <WidgetDialog
+        {...dialogParts}
+        {...dialogProps}
+        title="WIDGET_NAME"
+        configSchema={configSchema}
+        config={props.config}
+        onConfigSave={(config) => {
+          ctx.updateConfig(config);
+          setShowDialog(false);
+        }}
+      />
+    </>
   );
-};
+}
 
 export default defineWidget<WidgetConfig>({
   manifest: {
     name: "WIDGET_NAME",
+    icon: "mdi:gauge",
     minSize: { w: 1, h: 1 },
-    maxSize: { w: 4, h: 4 },
+    maxSize: { w: 8, h: 8 },
     defaultSize: { w: 2, h: 2 },
     sdkVersion: "SDK_RANGE",
-    schema: {
-      type: "object",
-      properties: {
-        label: {
-          type: "string",
-          title: "Widget Label",
-          description: "Display label for the widget",
-          default: "WIDGET_NAME",
-        },
+    capabilities: [{ domain: "sensor", access: "read" }],
+    examples: [
+      {
+        label: "Living room",
+        size: { w: 2, h: 2 },
+        config: { title: "Living room", entityIds: ["sensor.temperature_living"] },
       },
-    },
-    defaultConfig: { label: "WIDGET_NAME" },
+      {
+        label: "Small",
+        size: { w: 1, h: 1 },
+        config: { entityIds: ["sensor.temperature_living"] },
+      },
+    ],
   },
+  configSchema,
   component: WIDGET_NAMEWidget,
 });

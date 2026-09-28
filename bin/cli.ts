@@ -23,7 +23,7 @@ glasshome-widget <command> [--dir <path>] [options]
 
 Commands:
   create                 Create a new widget project (default when no project found)
-  add                    Add a new widget to the project
+  add                    Add a new widget to the project (prompts, or --name <widget> [--description <text>])
   build                  Build all widgets (per-widget, self-contained bundles)
   connect <url>          Connect to a running dashboard for live testing
                          --re-auth discards stored credentials and re-runs device approval
@@ -49,6 +49,7 @@ Examples:
   glasshome-widget                              Create a new widget project
   glasshome-widget create                       Create a new widget project
   glasshome-widget add
+  glasshome-widget add --name plant --description "How thirsty the plant is"
   glasshome-widget build
   glasshome-widget connect http://localhost:3333
   glasshome-widget preview
@@ -76,6 +77,7 @@ const { values: flags, positionals } = parseArgs({
   options: {
     dir: { type: "string" },
     name: { type: "string" },
+    description: { type: "string" },
     bump: { type: "string" },
     scope: { type: "string" },
     to: { type: "string" },
@@ -132,7 +134,10 @@ switch (effectiveCommand) {
 
   case "add": {
     const { runAdd } = await import("../src/commands/add");
-    await runAdd(resolveWidgetDir());
+    await runAdd(resolveWidgetDir(), {
+      name: str(flags.name),
+      description: str(flags.description),
+    });
     outro("Done");
     break;
   }
