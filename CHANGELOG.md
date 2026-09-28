@@ -5,6 +5,20 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0](https://github.com/glasshome/widget-cli/compare/v0.14.6...v0.15.0) (2026-09-28)
+
+
+### Features
+
+* **add:** --name and --description skip the prompts; new widgets start as a sensor tile built from the SDK parts ([8f630fe](https://github.com/glasshome/widget-cli/commit/8f630fee3d7241a87afcd55f8ff0497aed5f738d))
+* agent stubs, add flags, sensor-tile scaffold, preview fixes ([385a6cc](https://github.com/glasshome/widget-cli/commit/385a6ccf5b6f41563c07cf0d2a312aec7b0503a0))
+
+
+### Bug Fixes
+
+* **deps:** widget-sdk 1.19.0, which ships the widget guide ([8211b27](https://github.com/glasshome/widget-cli/commit/8211b27ba73e447b8151f6202474d674d116e3a6))
+* **preview:** a crashing widget fails the render, ui previews without being a direct dependency, iconify-icon is declared ([674f9c9](https://github.com/glasshome/widget-cli/commit/674f9c92187ab729142346c4f73f39e8433e2cfe))
+
 ## [0.14.6](https://github.com/glasshome/widget-cli/compare/v0.14.5...v0.14.6) (2026-09-28)
 
 
