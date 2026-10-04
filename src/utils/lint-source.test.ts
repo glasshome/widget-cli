@@ -18,7 +18,7 @@ describe("lintAndReport", () => {
     writeFileSync(
       join(root, "src", "neon", "neon.css"),
       [
-        ".key { box-shadow: var(--surface-raised); background: var(--surface-face); }",
+        ".key { box-shadow: var(--material-raised); background: var(--material-face); }",
         ".rim { box-shadow: var(--glass-rim-shine); }",
       ].join("\n"),
     );
