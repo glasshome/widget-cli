@@ -5,7 +5,7 @@ import { deprecations, formatDeprecation } from "@glasshome/widget-sdk/deprecati
 import { discoverWidgets } from "./manifest";
 
 /**
- * Source-level deprecation lint. Scans widget `.ts`/`.tsx` for deprecated API usage
+ * Source-level deprecation lint. Scans widget `.ts`/`.tsx`/`.css` for deprecated API usage
  * (driven by the SDK deprecation registry) and direct `zod` imports, printing the
  * removal timeline. Warnings only: never blocks a build until the deprecated path is
  * actually removed (v2). Runs on `bun widget build` and `connect`.
@@ -18,7 +18,7 @@ export interface SourceLintFinding {
   message: string;
 }
 
-const SOURCE_EXTS = [".ts", ".tsx"];
+const SOURCE_EXTS = [".ts", ".tsx", ".css"];
 const ZOD_IMPORT = /\bfrom\s+["']zod["']/;
 const ZOD_IMPORT_MESSAGE =
   'importing from "zod" directly couples your widget to the SDK\'s zod version. Prefer field.*/defineConfig; for advanced schemas import { z } from "@glasshome/widget-sdk".';
