@@ -5,6 +5,13 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0](https://github.com/glasshome/widget-cli/compare/v0.15.6...v0.16.0) (2026-10-04)
+
+
+### Features
+
+* **lint:** the source lint reads widget stylesheets too ([#28](https://github.com/glasshome/widget-cli/issues/28)) ([31a07ba](https://github.com/glasshome/widget-cli/commit/31a07badb430ca70693fac228236da3868d368b4))
+
 ## [0.15.6](https://github.com/glasshome/widget-cli/compare/v0.15.5...v0.15.6) (2026-10-04)
 
 
