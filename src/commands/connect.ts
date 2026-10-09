@@ -225,17 +225,17 @@ async function obtainToken(api: string, opts: { reAuth?: boolean }, s: Spinner):
   return stored || authorizeThisDevice(api, host, s);
 }
 
-async function ensureDevMode(api: string, token: string): Promise<void> {
-  try {
-    const configData = await trpcQuery<{ devMode: boolean }>({
-      apiUrl: api,
-      path: "appConfig.get",
-    });
-    if (!configData.devMode) {
-      await trpcMutate({ apiUrl: api, path: "appConfig.toggleDevMode", token, input: {} });
-    }
-  } catch {
-    // Non-fatal, dev mode may already be enabled
+// Developer Mode opens the dashboard's /dev and /mcp routes, so only a person switches it on.
+async function warnIfDevModeOff(api: string, token: string): Promise<void> {
+  const config = await trpcQuery<{ devMode: boolean }>({
+    apiUrl: api,
+    path: "appConfig.get",
+    token,
+  }).catch(() => null);
+  if (config?.devMode === false) {
+    log.warn(
+      "Developer Mode is off, so the dashboard won't reload your widgets on save. Switch it on in Settings > General.",
+    );
   }
 }
 
@@ -411,9 +411,9 @@ export async function runConnect(
   }
 
   s.start("Registering widgets with dashboard...");
-  await ensureDevMode(api, token);
   const registeredTags = await uploadAllWidgets(apiUrl, distDir, token);
   s.stop("Widgets registered");
+  await warnIfDevModeOff(api, token);
 
   const reupload = watchAndReupload({ cwd, apiUrl, distDir, buildOpts, token });
   announceConnected(cwd);
