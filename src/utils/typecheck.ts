@@ -43,7 +43,7 @@ function resolveTsc(cwd: string): string | null {
   }
 }
 
-export interface RunOutput {
+interface RunOutput {
   code: number | null;
   stdout: string;
   stderr: string;
