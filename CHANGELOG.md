@@ -5,6 +5,13 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.8](https://github.com/glasshome/widget-cli/compare/v0.16.7...v0.16.8) (2026-10-11)
+
+
+### Bug Fixes
+
+* **typecheck:** RunOutput stays internal to the runner port ([4769b51](https://github.com/glasshome/widget-cli/commit/4769b511b11284c852ac103d274c40e3206253f1))
+
 ## [0.16.7](https://github.com/glasshome/widget-cli/compare/v0.16.6...v0.16.7) (2026-10-11)
 
 
