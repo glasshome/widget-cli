@@ -5,6 +5,14 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.6](https://github.com/glasshome/widget-cli/compare/v0.16.5...v0.16.6) (2026-10-11)
+
+
+### Bug Fixes
+
+* **deps:** sync-layer 0.12.0, widget-sdk 1.23.0, widget-contract 0.4.0 ([179a5a6](https://github.com/glasshome/widget-cli/commit/179a5a64006c54b6e74942ed1f9bd24432ca0715))
+* **preview:** click settle advances the page clock instead of waiting on getAnimations ([7f611c4](https://github.com/glasshome/widget-cli/commit/7f611c44664c1a7bca54ab4aeba5ed0feef1a09d))
+
 ## [0.16.5](https://github.com/glasshome/widget-cli/compare/v0.16.4...v0.16.5) (2026-10-10)
 
 
