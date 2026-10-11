@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
+import { systemClock, withDeadline } from "@glasshome/widget-contract/clock";
 import type { Browser, Page } from "playwright";
 import { chromium } from "playwright";
 import { nixLdLibraryPath } from "./nix-ld";
@@ -132,15 +133,9 @@ export async function withRenderTimeout<T>(
   fn: () => Promise<T>,
   ms: number = RENDER_TIMEOUT_MS,
 ): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`render timeout after ${ms}ms: ${label}`)), ms);
-  });
-  try {
-    return await Promise.race([fn(), timeout]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+  const result = await withDeadline(systemClock, fn(), ms);
+  if (!result.ok) throw new Error(`render timeout after ${ms}ms: ${label}`);
+  return result.value;
 }
 
 /** Apply the nix-ld library path exactly once. `nixLdLibraryPath()` prepends the
@@ -172,7 +167,11 @@ async function hardClose(browser: Browser): Promise<void> {
   const proc = (
     browser as Browser & { process?: () => { kill: (s: string) => void } | null }
   ).process?.();
-  await Promise.race([browser.close().catch(() => {}), new Promise((r) => setTimeout(r, 3_000))]);
+  await withDeadline(
+    systemClock,
+    browser.close().catch(() => {}),
+    3_000,
+  );
   proc?.kill("SIGKILL");
 }
 

@@ -115,7 +115,7 @@ export async function runSweep(opts: SweepOptions): Promise<SweepSummary> {
       }, opts.click);
       if (!at) throw new Error(`--click: nothing matches ${opts.click} inside the widget`);
       await page.mouse.click(at.x, at.y);
-      await page.waitForTimeout(1_500);
+      await page.waitForFunction(() => document.getAnimations().length === 0);
     }
     await page.locator("#stage").screenshot({ path: file, omitBackground: true });
     if (!opts.evaluate) return undefined;
