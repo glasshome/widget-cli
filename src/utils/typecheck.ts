@@ -43,7 +43,20 @@ function resolveTsc(cwd: string): string | null {
   }
 }
 
-export function runTypecheck(cwd: string): TypecheckResult {
+export interface RunOutput {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+export type ProcessRunner = (cmd: string, args: string[], cwd: string) => RunOutput;
+
+const spawnRunner: ProcessRunner = (cmd, args, cwd) => {
+  const proc = Bun.spawnSync([cmd, ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+  return { code: proc.exitCode, stdout: proc.stdout.toString(), stderr: proc.stderr.toString() };
+};
+
+export function runTypecheck(cwd: string, run: ProcessRunner = spawnRunner): TypecheckResult {
   const tsconfig = join(cwd, "tsconfig.json");
   if (!existsSync(tsconfig)) return { status: "skipped", reason: "no tsconfig.json" };
 
@@ -52,15 +65,11 @@ export function runTypecheck(cwd: string): TypecheckResult {
     return { status: "skipped", reason: "typescript is not installed in this project" };
   }
 
-  const proc = Bun.spawnSync([process.execPath, tsc, "--noEmit", "-p", tsconfig], {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if (proc.exitCode === 0) return { status: "ok" };
+  const proc = run(process.execPath, [tsc, "--noEmit", "-p", tsconfig], cwd);
+  if (proc.code === 0) return { status: "ok" };
 
-  const output = [proc.stdout.toString(), proc.stderr.toString()].join("").trim();
-  return { status: "failed", output: output || `tsc exited ${proc.exitCode}` };
+  const output = [proc.stdout, proc.stderr].join("").trim();
+  return { status: "failed", output: output || `tsc exited ${proc.code}` };
 }
 
 /**
