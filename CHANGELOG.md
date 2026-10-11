@@ -5,6 +5,13 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.7](https://github.com/glasshome/widget-cli/compare/v0.16.6...v0.16.7) (2026-10-11)
+
+
+### Bug Fixes
+
+* **typecheck:** tests fake the process runner; one real tsc run keeps a slow-runner budget ([04087ab](https://github.com/glasshome/widget-cli/commit/04087abeb0342e0f51084f39c1814818e153aff7))
+
 ## [0.16.6](https://github.com/glasshome/widget-cli/compare/v0.16.5...v0.16.6) (2026-10-11)
 
 
