@@ -104,14 +104,6 @@ async function loadWidget(name: string): Promise<{ def: WidgetDefinition; css: s
 // size-responsive widget one tier below what users see (energy-flow never
 // reached its node-graph tier, so the storefront advertised the compact
 // layout).
-// Replays an example's own service calls, read from the URL, against demo data that refuses unknown ones.
-const replayService = callService as (
-  domain: string,
-  service: string,
-  data: Record<string, unknown>,
-  target: { entity_id?: string },
-) => Promise<unknown>;
-
 const CONTAINER = 1256;
 const COLS = 12;
 const GAP = 16;
@@ -218,7 +210,14 @@ async function main(): Promise<void> {
   for (const call of params.getAll("svc")) {
     const [service = "", entityId, data] = call.split("|");
     const [domain = "", name = ""] = service.split(".");
-    await replayService(domain, name, JSON.parse(data ?? "{}"), { entity_id: entityId });
+    // An example's own call, read from the URL, replayed against demo data that refuses unknown ones.
+    type Call = Parameters<typeof callService>;
+    await callService(
+      domain as Call[0],
+      name as Call[1],
+      JSON.parse(data ?? "{}") as Call[2],
+      { entity_id: entityId } as Call[3],
+    );
   }
 
   // Background and padding are the renderer's job: the preview is the widget
