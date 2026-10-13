@@ -210,7 +210,14 @@ async function main(): Promise<void> {
   for (const call of params.getAll("svc")) {
     const [service = "", entityId, data] = call.split("|");
     const [domain = "", name = ""] = service.split(".");
-    await callService(domain, name, JSON.parse(data ?? "{}"), { entity_id: entityId });
+    // An example's own call, read from the URL, replayed against demo data that refuses unknown ones.
+    type Call = Parameters<typeof callService>;
+    await callService(
+      domain as Call[0],
+      name as Call[1],
+      JSON.parse(data ?? "{}") as Call[2],
+      { entity_id: entityId } as Call[3],
+    );
   }
 
   // Background and padding are the renderer's job: the preview is the widget

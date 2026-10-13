@@ -8,6 +8,6 @@
     "skipLibCheck": true,
     "types": ["@types/bun"]
   },
-  "include": ["src", "bin"],
-  "exclude": ["src/preview/harness"]
+  "include": ["**/*"],
+  "exclude": ["node_modules", "dist", "src/preview/harness"]
 }
