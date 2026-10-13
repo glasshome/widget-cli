@@ -36,7 +36,7 @@
   "scripts": {
     "cli": "bun bin/cli.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/preview/harness",
     "check:dead": "fallow dead-code --fail-on-issues",
     "lint": "oxlint --type-aware . && oxfmt --check ."
   },
