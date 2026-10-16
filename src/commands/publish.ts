@@ -262,6 +262,7 @@ export async function runPublish(
     process.exit(1);
   }
 
+  if (publishData.notice) log.warn(publishData.notice);
   s.message(`Uploading ${builtManifest.name} to CDN...`);
   try {
     await uploadToR2(publishData.uploadUrl, bundleBuffer);

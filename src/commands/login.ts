@@ -85,7 +85,7 @@ export async function runLogin(hubUrl?: string): Promise<void> {
       authUrl.searchParams.set("code_challenge", codeChallenge);
       authUrl.searchParams.set("code_challenge_method", "S256");
       authUrl.searchParams.set("state", state);
-      authUrl.searchParams.set("scope", "openid profile email");
+      authUrl.searchParams.set("scope", "openid profile email widgets:publish");
 
       log.info(`Opening browser for login at ${hub}`);
       s.start("Waiting for browser login...");
