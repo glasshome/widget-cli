@@ -5,6 +5,14 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0](https://github.com/glasshome/widget-cli/compare/v0.16.9...v0.17.0) (2026-10-17)
+
+
+### Features
+
+* **login:** request the widgets:publish scope and show Hub notices ([4be9fc5](https://github.com/glasshome/widget-cli/commit/4be9fc50b4c37291ac7063495941e4f33e6f1d7f))
+* **login:** request the widgets:publish scope and show Hub notices ([539f9a8](https://github.com/glasshome/widget-cli/commit/539f9a834f6104aa9ccb2e17e76d1d4eca573c94))
+
 ## [0.16.9](https://github.com/glasshome/widget-cli/compare/v0.16.8...v0.16.9) (2026-10-14)
 
 
