@@ -41,6 +41,8 @@ interface PublishRequestResponse {
   versionId: string;
   cssUploadUrl?: string;
   cssUrl?: string;
+  /** Something the Hub wants the publisher to act on, such as renewing the login. */
+  notice?: string;
 }
 
 interface PublishConfirmResponse {
