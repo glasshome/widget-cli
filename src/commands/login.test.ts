@@ -16,3 +16,10 @@ describe("authorizeUrl", () => {
     expect(url.searchParams.get("redirect_uri")).toBe("http://127.0.0.1:9274/callback");
   });
 });
+
+describe("authorizeUrl max_age", () => {
+  test("asks for a browser sign-in no older than a day, since the hub dates the login from it", () => {
+    const url = authorizeUrl("https://glasshome.app", { challenge: "c", state: "s" });
+    expect(url.searchParams.get("max_age")).toBe("86400");
+  });
+});

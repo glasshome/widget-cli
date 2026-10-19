@@ -15,6 +15,7 @@ const LOGIN_TIMEOUT_MS = 120_000;
 
 // offline_access gets a refresh token, so a login renews for the hub's 30 days instead of ending after an hour.
 const SCOPE = "openid profile email offline_access widgets:publish";
+const SIGN_IN_MAX_AGE_SECONDS = 86_400;
 
 function base64url(buf: Buffer): string {
   return buf.toString("base64url");
@@ -29,6 +30,8 @@ export function authorizeUrl(hub: string, pkce: { challenge: string; state: stri
   url.searchParams.set("code_challenge_method", "S256");
   url.searchParams.set("state", pkce.state);
   url.searchParams.set("scope", SCOPE);
+  // The hub's 30 days count from the browser sign-in, so ask for one no older than a day.
+  url.searchParams.set("max_age", String(SIGN_IN_MAX_AGE_SECONDS));
   return url;
 }
 
