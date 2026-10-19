@@ -22,6 +22,7 @@ interface PublishOptions {
   name?: string;
   bump?: "keep" | "patch" | "minor" | "major";
   scope?: string;
+  allowPrereleaseDash?: boolean;
 }
 
 async function authenticate(hubUrl: string): Promise<string> {
@@ -210,6 +211,8 @@ export async function runPublish(
       const answer = await confirm({ message, initialValue: false });
       return !cancelled(answer) && answer;
     },
+    interactive: process.stdin.isTTY === true,
+    allowPrereleaseDash: options?.allowPrereleaseDash === true,
   });
   if (!floor.ok) {
     log.error(floor.message);

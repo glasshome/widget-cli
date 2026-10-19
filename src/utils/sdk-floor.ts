@@ -3,14 +3,24 @@ import { createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { type DashRelease, dashRequirement } from "@glasshome/widget-contract/dash-releases";
 import { deriveFloor } from "@glasshome/widget-contract/sdk-floor";
+import { initSync, parse } from "es-module-lexer";
 import { fetchDashReleases } from "./hub-api";
 import { readManifest, writeManifest } from "./manifest";
 import { isBunGlobalCache } from "./resolution";
 import { getInstalledSdkVersion } from "./sdk-version";
 
-const RELATIVE_JS_RE = /["'`](\.{1,2}\/[^"'`\s]+?\.m?js)["'`]/g;
+function relativeImports(code: string): string[] | null {
+  initSync();
+  try {
+    return parse(code)[0]
+      .map((imp) => imp.n)
+      .filter((n): n is string => n !== undefined && (n.startsWith("./") || n.startsWith("../")));
+  } catch {
+    return null;
+  }
+}
 
-/** The widget's entry plus every chunk it reaches by relative path; null when one cannot be read. */
+/** The widget's entry plus every chunk it imports by relative path; null when one cannot be read. */
 function readBuiltChunks(cwd: string, widgetName: string): string | null {
   const distDir = resolve(cwd, "dist");
   const pending = [join(distDir, `${widgetName}.js`)];
@@ -29,10 +39,9 @@ function readBuiltChunks(cwd: string, widgetName: string): string | null {
       return null;
     }
     parts.push(code);
-    for (const match of code.matchAll(RELATIVE_JS_RE)) {
-      const spec = match[1];
-      if (spec) pending.push(resolve(dirname(file), spec));
-    }
+    const specs = relativeImports(code);
+    if (specs === null) return null;
+    for (const spec of specs) pending.push(resolve(dirname(file), spec));
   }
   return parts.join("\n");
 }
@@ -97,9 +106,38 @@ function oldestStableDash(range: string, releases: DashRelease[]): string | null
 export interface FloorDeps {
   info: (line: string) => void;
   confirm: (message: string) => Promise<boolean>;
+  interactive: boolean;
+  allowPrereleaseDash: boolean;
+  releasesSignal?: () => AbortSignal;
 }
 
-/** Derive the widget's sdkVersion floor from its built bundle, write it, and say which Dash it reaches. */
+const NO_STABLE_DASH = "No stable Dash runs this yet.";
+
+async function acceptReach(
+  range: string,
+  releases: DashRelease[],
+  deps: FloorDeps,
+): Promise<Settled> {
+  const oldest = oldestStableDash(range, releases);
+  if (oldest) {
+    deps.info(`Runs on Dash ${oldest} and later`);
+    return { ok: true };
+  }
+  if (deps.allowPrereleaseDash) {
+    deps.info(`${NO_STABLE_DASH} Publishing anyway (--allow-prerelease-dash).`);
+    return { ok: true };
+  }
+  if (!deps.interactive) {
+    return {
+      ok: false,
+      message: `${NO_STABLE_DASH} Pass --allow-prerelease-dash to publish anyway.`,
+    };
+  }
+  if (await deps.confirm(`${NO_STABLE_DASH} Publish anyway?`)) return { ok: true };
+  return { ok: false, message: "Publish cancelled." };
+}
+
+/** Derive the widget's sdkVersion floor from its built bundle, say which Dash it reaches, and write it once publish proceeds. */
 export async function settleSdkFloor(
   cwd: string,
   widgetName: string,
@@ -109,24 +147,21 @@ export async function settleSdkFloor(
   const floor = floorOf(cwd, widgetName);
   if (!floor.ok) return floor;
   const range = `^${floor.floor}`;
-  const manifest = readManifest(cwd, widgetName);
-  manifest.sdkVersion = range;
-  writeManifest(cwd, widgetName, manifest);
   if (floor.notice) deps.info(floor.notice);
 
   let releases: DashRelease[];
   try {
-    releases = await fetchDashReleases(hubUrl);
+    releases = await fetchDashReleases(hubUrl, deps.releasesSignal?.());
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     return { ok: false, message: `Could not read Dash releases from ${hubUrl}: ${detail}` };
   }
 
-  const oldest = oldestStableDash(range, releases);
-  if (oldest) {
-    deps.info(`Runs on Dash ${oldest} and later`);
-    return { ok: true };
-  }
-  if (await deps.confirm("No stable Dash runs this yet. Publish anyway?")) return { ok: true };
-  return { ok: false, message: "Publish cancelled." };
+  const reach = await acceptReach(range, releases, deps);
+  if (!reach.ok) return reach;
+
+  const manifest = readManifest(cwd, widgetName);
+  manifest.sdkVersion = range;
+  writeManifest(cwd, widgetName, manifest);
+  return reach;
 }

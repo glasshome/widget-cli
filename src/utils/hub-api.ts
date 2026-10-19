@@ -17,8 +17,13 @@ export async function fetchScopes(hubUrl: string, token: string): Promise<Publis
   return data.scopes;
 }
 
-export async function fetchDashReleases(hubUrl: string): Promise<DashRelease[]> {
-  const res = await fetch(`${hubUrl}/api/widgets/dash-releases`);
+const DASH_RELEASES_TIMEOUT_MS = 10_000;
+
+export async function fetchDashReleases(
+  hubUrl: string,
+  signal: AbortSignal = AbortSignal.timeout(DASH_RELEASES_TIMEOUT_MS),
+): Promise<DashRelease[]> {
+  const res = await fetch(`${hubUrl}/api/widgets/dash-releases`, { signal });
   if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
   return dashReleasesSchema.parse(await res.json());
 }

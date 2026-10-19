@@ -38,9 +38,10 @@ Commands:
                          --eval <expr> prints an expression per render (root = widget shadow root)
   validate [name]        Validate all widgets or a specific one
   publish [hub-url]      Build and publish a widget to Hub
+                         --allow-prerelease-dash publishes when only a beta or rc Dash runs it
   login [hub-url]        Authenticate with GlassHome Hub
   info [name]            Show widget metadata and bundle info
-  upgrade                Upgrade @glasshome/widget-sdk (latest, or --to <version>) and sync manifests
+  upgrade                Upgrade @glasshome/widget-sdk (latest, or --to <version>)
   migrate config         Rewrite widgets' raw-zod config to defineConfig + field.*
                          --name <widget> targets one; --dry previews without writing
   help                   Show this help message
@@ -82,6 +83,7 @@ const { values: flags, positionals } = parseArgs({
     scope: { type: "string" },
     to: { type: "string" },
     "re-auth": { type: "boolean" },
+    "allow-prerelease-dash": { type: "boolean" },
     isolate: { type: "boolean" },
     sizes: { type: "string" },
     theme: { type: "string" },
@@ -213,6 +215,7 @@ switch (effectiveCommand) {
       name: str(flags.name),
       bump: str(flags.bump) as "keep" | "patch" | "minor" | "major" | undefined,
       scope: str(flags.scope),
+      allowPrereleaseDash: flags["allow-prerelease-dash"] === true,
     });
     outro("Done");
     break;

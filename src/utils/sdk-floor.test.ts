@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DashRelease } from "@glasshome/widget-contract/dash-releases";
-import { settleSdkFloor } from "./sdk-floor";
+import { type FloorDeps, settleSdkFloor } from "./sdk-floor";
 
 const tmpDir = mkdtempSync(join(tmpdir(), "glasshome-sdk-floor-"));
 let fixtureCount = 0;
@@ -26,9 +26,12 @@ beforeAll(() => {
   server = Bun.serve({
     port: 0,
     fetch(req) {
-      if (new URL(req.url).pathname === "/api/widgets/dash-releases") {
-        return Response.json(releases);
+      const path = new URL(req.url).pathname;
+      if (path === "/api/widgets/dash-releases") return Response.json(releases);
+      if (path === "/garbled/api/widgets/dash-releases") {
+        return Response.json([{ version: 1, stage: "nightly" }]);
       }
+      if (path === "/silent/api/widgets/dash-releases") return new Promise<Response>(() => {});
       return new Response("not found", { status: 404 });
     },
   });
@@ -46,6 +49,8 @@ interface FixtureOptions {
   sdkVersion?: string;
 }
 
+const UNTOUCHED = "^1.0.0";
+
 function project(opts: FixtureOptions): string {
   const dir = join(tmpDir, `project-${fixtureCount++}`);
   mkdirSync(join(dir, "src", "demo"), { recursive: true });
@@ -53,7 +58,7 @@ function project(opts: FixtureOptions): string {
   writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "fixture" }));
   writeFileSync(
     join(dir, "src", "demo", "manifest.json"),
-    `${JSON.stringify({ name: "Demo", sdkVersion: "^1.0.0" }, null, 2)}\n`,
+    `${JSON.stringify({ name: "Demo", sdkVersion: UNTOUCHED }, null, 2)}\n`,
   );
   for (const [path, code] of Object.entries(opts.files)) {
     mkdirSync(join(dir, "dist", path, ".."), { recursive: true });
@@ -81,28 +86,36 @@ function writtenFloor(dir: string): string {
   return JSON.parse(readFileSync(join(dir, "src", "demo", "manifest.json"), "utf-8")).sdkVersion;
 }
 
-function recorder(answer = true) {
+function recorder(
+  overrides: Partial<Omit<FloorDeps, "info" | "confirm">> & { answer?: boolean } = {},
+) {
   const lines: string[] = [];
   const asked: string[] = [];
-  return {
-    lines,
-    asked,
-    deps: {
-      info: (line: string) => lines.push(line),
-      confirm: async (message: string) => {
-        asked.push(message);
-        return answer;
-      },
+  const deps: FloorDeps = {
+    info: (line) => lines.push(line),
+    confirm: async (message) => {
+      asked.push(message);
+      return overrides.answer ?? true;
     },
+    interactive: overrides.interactive ?? true,
+    allowPrereleaseDash: overrides.allowPrereleaseDash ?? false,
+    releasesSignal: overrides.releasesSignal,
   };
+  return { lines, asked, deps };
 }
 
+const PLAIN = 'import{Widget as e}from"@glasshome/widget-sdk";export default e;';
+const NEEDS_1_9 = 'import{useLight as l}from"@glasshome/widget-sdk";export default l;';
 const ENTRY_WITH_LAZY_CHUNK = [
   'import{Widget as e}from"@glasshome/widget-sdk";',
   'const t=()=>import("./assets/panel-abc123.js");',
   "export default e(t);",
 ].join("\n");
 const LAZY_CHUNK = 'import{useEntity as u}from"@glasshome/widget-sdk";export const p=u;';
+const ONLY_PRERELEASE = [
+  release("1.2.0", "stable", "1.4.0"),
+  release("1.3.0-beta.1", "beta", "1.9.0"),
+];
 
 describe("settleSdkFloor", () => {
   test("writes the floor derived from the entry and its lazy chunk, and prints the reach", async () => {
@@ -123,6 +136,20 @@ describe("settleSdkFloor", () => {
     expect(out.asked).toEqual([]);
   });
 
+  test("a relative path in a string literal is no import and is not followed", async () => {
+    releases = [release("1.4.0", "stable", "1.9.0")];
+    const dir = project({
+      files: {
+        "demo.js":
+          'import{Widget as e}from"@glasshome/widget-sdk";const c="./copy.js";export default e(c);',
+      },
+    });
+    const out = recorder();
+    expect(await settleSdkFloor(dir, "demo", hubUrl, out.deps)).toEqual({ ok: true });
+    expect(writtenFloor(dir)).toBe("^1.4.0");
+    expect(out.lines).not.toContain("Floor kept at 1.9.0: the built bundle could not be read");
+  });
+
   test("a name no released SDK exports aborts before anything is written", async () => {
     releases = [release("1.4.0", "stable", "1.9.0")];
     const dir = project({
@@ -133,7 +160,7 @@ describe("settleSdkFloor", () => {
       ok: false,
       message: "brandNew is not in any released SDK. Release the SDK first.",
     });
-    expect(writtenFloor(dir)).toBe("^1.0.0");
+    expect(writtenFloor(dir)).toBe(UNTOUCHED);
   });
 
   test("a namespace import keeps the floor at the build SDK and says why", async () => {
@@ -148,19 +175,30 @@ describe("settleSdkFloor", () => {
     expect(out.lines).toContain("Runs on Dash 1.4.0 and later");
   });
 
-  test("an SDK without export history keeps the floor at the build SDK", async () => {
+  test("a direct ui import keeps the floor at the build SDK and says why", async () => {
     releases = [release("1.4.0", "stable", "1.9.0")];
     const dir = project({
-      history: null,
-      files: { "demo.js": 'import{Widget as e}from"@glasshome/widget-sdk";export default e;' },
+      files: {
+        "demo.js":
+          'import{Widget as e}from"@glasshome/widget-sdk";import{Card as c}from"@glasshome/ui/solid";export default e(c);',
+      },
     });
+    const out = recorder();
+    expect(await settleSdkFloor(dir, "demo", hubUrl, out.deps)).toEqual({ ok: true });
+    expect(writtenFloor(dir)).toBe("^1.9.0");
+    expect(out.lines).toContain("Floor kept at 1.9.0: the widget imports @glasshome/ui directly");
+  });
+
+  test("an SDK without export history keeps the floor at the build SDK", async () => {
+    releases = [release("1.4.0", "stable", "1.9.0")];
+    const dir = project({ history: null, files: { "demo.js": PLAIN } });
     const out = recorder();
     expect(await settleSdkFloor(dir, "demo", hubUrl, out.deps)).toEqual({ ok: true });
     expect(writtenFloor(dir)).toBe("^1.9.0");
     expect(out.lines).toContain("Floor kept at 1.9.0: the installed SDK predates export history");
   });
 
-  test("a chunk the entry names but the build did not write keeps the floor at the build SDK", async () => {
+  test("a chunk the entry imports but the build did not write keeps the floor at the build SDK", async () => {
     releases = [release("1.4.0", "stable", "1.9.0")];
     const dir = project({ files: { "demo.js": ENTRY_WITH_LAZY_CHUNK } });
     const out = recorder();
@@ -170,35 +208,83 @@ describe("settleSdkFloor", () => {
   });
 
   test("no stable Dash carrying the floor asks before publishing", async () => {
-    releases = [release("1.2.0", "stable", "1.4.0"), release("1.3.0-beta.1", "beta", "1.9.0")];
-    const dir = project({
-      files: { "demo.js": 'import{useLight as l}from"@glasshome/widget-sdk";export default l;' },
-    });
-    const yes = recorder(true);
+    releases = ONLY_PRERELEASE;
+    const dir = project({ files: { "demo.js": NEEDS_1_9 } });
+    const yes = recorder({ answer: true });
     expect(await settleSdkFloor(dir, "demo", hubUrl, yes.deps)).toEqual({ ok: true });
     expect(yes.asked).toEqual(["No stable Dash runs this yet. Publish anyway?"]);
+    expect(writtenFloor(dir)).toBe("^1.9.0");
+  });
 
-    const no = recorder(false);
-    expect(await settleSdkFloor(dir, "demo", hubUrl, no.deps)).toEqual({
+  test("declining leaves the manifest unchanged", async () => {
+    releases = ONLY_PRERELEASE;
+    const dir = project({ files: { "demo.js": NEEDS_1_9 } });
+    expect(await settleSdkFloor(dir, "demo", hubUrl, recorder({ answer: false }).deps)).toEqual({
       ok: false,
       message: "Publish cancelled.",
     });
+    expect(writtenFloor(dir)).toBe(UNTOUCHED);
   });
 
-  test("an unreachable hub fails closed", async () => {
-    const dir = project({
-      files: { "demo.js": 'import{Widget as e}from"@glasshome/widget-sdk";export default e;' },
+  test("without a terminal and without the flag, no stable Dash fails closed naming the flag", async () => {
+    releases = ONLY_PRERELEASE;
+    const dir = project({ files: { "demo.js": NEEDS_1_9 } });
+    const out = recorder({ interactive: false });
+    expect(await settleSdkFloor(dir, "demo", hubUrl, out.deps)).toEqual({
+      ok: false,
+      message: "No stable Dash runs this yet. Pass --allow-prerelease-dash to publish anyway.",
     });
+    expect(out.asked).toEqual([]);
+    expect(writtenFloor(dir)).toBe(UNTOUCHED);
+  });
+
+  test("--allow-prerelease-dash publishes without asking", async () => {
+    releases = ONLY_PRERELEASE;
+    const dir = project({ files: { "demo.js": NEEDS_1_9 } });
+    const out = recorder({ interactive: false, allowPrereleaseDash: true });
+    expect(await settleSdkFloor(dir, "demo", hubUrl, out.deps)).toEqual({ ok: true });
+    expect(out.asked).toEqual([]);
+    expect(writtenFloor(dir)).toBe("^1.9.0");
+  });
+
+  test("an unreachable hub fails closed and leaves the manifest unchanged", async () => {
+    const dir = project({ files: { "demo.js": PLAIN } });
     const result = await settleSdkFloor(dir, "demo", "http://127.0.0.1:1", recorder().deps);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toStartWith("Could not read Dash releases from");
+    expect(writtenFloor(dir)).toBe(UNTOUCHED);
+  });
+
+  test("a hub that never answers is cut off by the signal and fails closed", async () => {
+    const dir = project({ files: { "demo.js": PLAIN } });
+    const timedOut = new AbortController();
+    const settling = settleSdkFloor(
+      dir,
+      "demo",
+      `${hubUrl}/silent`,
+      recorder({ releasesSignal: () => timedOut.signal }).deps,
+    );
+    timedOut.abort(new DOMException("The operation timed out.", "TimeoutError"));
+    const result = await settling;
+    expect(result).toEqual({
+      ok: false,
+      message: `Could not read Dash releases from ${hubUrl}/silent: The operation timed out.`,
+    });
+    expect(writtenFloor(dir)).toBe(UNTOUCHED);
   });
 
   test("a hub that does not serve the table fails closed", async () => {
-    const dir = project({
-      files: { "demo.js": 'import{Widget as e}from"@glasshome/widget-sdk";export default e;' },
-    });
+    const dir = project({ files: { "demo.js": PLAIN } });
     const result = await settleSdkFloor(dir, "demo", `${hubUrl}/elsewhere`, recorder().deps);
     expect(result.ok).toBe(false);
+    expect(writtenFloor(dir)).toBe(UNTOUCHED);
+  });
+
+  test("a hub answering a table of the wrong shape fails closed", async () => {
+    const dir = project({ files: { "demo.js": PLAIN } });
+    const result = await settleSdkFloor(dir, "demo", `${hubUrl}/garbled`, recorder().deps);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toStartWith("Could not read Dash releases from");
+    expect(writtenFloor(dir)).toBe(UNTOUCHED);
   });
 });
