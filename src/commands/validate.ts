@@ -65,7 +65,7 @@ function validateManifest(manifest: WidgetManifest, installedSdk: string | null)
     !satisfiesSdk(installedSdk, manifest.sdkVersion)
   ) {
     errors.push(
-      `sdkVersion "${manifest.sdkVersion}" excludes the installed SDK ${installedSdk}, so it claims a compatibility it was not built for; run \`bun widget upgrade\``,
+      `sdkVersion "${manifest.sdkVersion}" excludes the installed SDK ${installedSdk}, so it claims a compatibility it was not built for; \`bun widget publish\` sets it from the built bundle`,
     );
   }
 

@@ -127,8 +127,7 @@ export async function runCreate() {
     pkgContent = pkgContent.replace(/PROJECT_NAME/g, projectName);
     pkgContent = pkgContent.replace(/PROJECT_DESCRIPTION/g, projectDesc);
     pkgContent = pkgContent.replace(/CLI_VERSION/g, `^${getCliVersion()}`);
-    // Nothing is installed yet, so this comes from the SDK the CLI ships
-    // against. `bun widget upgrade` re-syncs it and every manifest later.
+    // Nothing is installed yet, so this comes from the SDK the CLI ships against.
     pkgContent = pkgContent.replace(/SDK_RANGE/g, defaultSdkRange() ?? FALLBACK_SDK_RANGE);
     writeFileSync(pkgPath, pkgContent);
 

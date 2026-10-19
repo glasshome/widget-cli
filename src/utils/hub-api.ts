@@ -1,3 +1,5 @@
+import { type DashRelease, dashReleasesSchema } from "@glasshome/widget-contract/dash-releases";
+
 interface PublishScope {
   name: string;
   type: "personal" | "organization";
@@ -13,6 +15,12 @@ export async function fetchScopes(hubUrl: string, token: string): Promise<Publis
   }
   const data = (await res.json()) as { scopes: PublishScope[] };
   return data.scopes;
+}
+
+export async function fetchDashReleases(hubUrl: string): Promise<DashRelease[]> {
+  const res = await fetch(`${hubUrl}/api/widgets/dash-releases`);
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+  return dashReleasesSchema.parse(await res.json());
 }
 
 import type { GridSize } from "@glasshome/widget-sdk";
