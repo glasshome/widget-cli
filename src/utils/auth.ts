@@ -102,7 +102,13 @@ export async function getToken(hubUrl: string): Promise<string | null> {
     return stored.accessToken;
   }
 
-  if (!stored.refreshToken) return null;
+  return renewHubToken(hubUrl);
+}
+
+/** Trades the stored refresh token for a new access token; null when there is none or the hub refuses it. */
+export async function renewHubToken(hubUrl: string): Promise<string | null> {
+  const stored = getStoredAuth();
+  if (!stored?.refreshToken || stored.hubUrl !== hubUrl) return null;
 
   try {
     const res = await fetch(`${hubUrl}/api/auth/oauth2/token`, {
@@ -135,6 +141,43 @@ export async function getToken(hubUrl: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+const loginEnded = () =>
+  Object.assign(
+    new Error("Your GlassHome Hub login has ended. Run `glasshome-widget login`, then try again."),
+    { status: 401 },
+  );
+
+const isUnauthorized = (err: unknown): boolean =>
+  err instanceof Error && "status" in err && err.status === 401;
+
+/**
+ * Runs hub calls with one token; the first 401 renews it and retries once, since the
+ * hub can end an access token before its expiry (a browser sign-out ends it at once).
+ */
+export function renewingCaller(
+  initial: string,
+  renew: () => Promise<string | null>,
+): <T>(request: (token: string) => Promise<T>) => Promise<T> {
+  let token = initial;
+  let renewed = false;
+  return async (request) => {
+    try {
+      return await request(token);
+    } catch (err) {
+      if (!isUnauthorized(err)) throw err;
+      const next = renewed ? null : await renew();
+      renewed = true;
+      if (!next) throw loginEnded();
+      token = next;
+    }
+    try {
+      return await request(token);
+    } catch (err) {
+      throw isUnauthorized(err) ? loginEnded() : err;
+    }
+  };
 }
 
 function clearToken(): void {

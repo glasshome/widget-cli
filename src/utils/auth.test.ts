@@ -5,6 +5,7 @@ import {
   type DevicePollOutcome,
   deviceAuthorize,
   pollDeviceToken,
+  renewingCaller,
 } from "./auth";
 
 const API = "http://dash.test";
@@ -127,5 +128,60 @@ describe("deviceAuthorize", () => {
       ),
     );
     await expect(outcome).rejects.toThrow("no device code");
+  });
+});
+
+describe("renewingCaller", () => {
+  const unauthorized = () => Object.assign(new Error("HTTP 401"), { status: 401 });
+
+  test("a 401 renews the token once and retries the call with it", async () => {
+    const seen: string[] = [];
+    let renewals = 0;
+    const call = renewingCaller("old", async () => {
+      renewals += 1;
+      return "new";
+    });
+    const value = await call(async (token) => {
+      seen.push(token);
+      if (token === "old") throw unauthorized();
+      return "published";
+    });
+    expect(value).toBe("published");
+    expect(seen).toEqual(["old", "new"]);
+    expect(await call(async (token) => token)).toBe("new");
+    expect(renewals).toBe(1);
+  });
+
+  test("a second 401 fails, asking for a new login, without renewing again", async () => {
+    let renewals = 0;
+    const call = renewingCaller("old", async () => {
+      renewals += 1;
+      return "new";
+    });
+    await expect(call(async () => Promise.reject(unauthorized()))).rejects.toThrow(
+      "glasshome-widget login",
+    );
+    await expect(call(async () => Promise.reject(unauthorized()))).rejects.toThrow(
+      "glasshome-widget login",
+    );
+    expect(renewals).toBe(1);
+  });
+
+  test("a renewal the hub refuses fails, asking for a new login", async () => {
+    const call = renewingCaller("old", async () => null);
+    await expect(call(async () => Promise.reject(unauthorized()))).rejects.toThrow(
+      "glasshome-widget login",
+    );
+  });
+
+  test("any other failure passes through untouched", async () => {
+    let renewals = 0;
+    const call = renewingCaller("old", async () => {
+      renewals += 1;
+      return "new";
+    });
+    const conflict = Object.assign(new Error("taken"), { status: 409 });
+    await expect(call(async () => Promise.reject(conflict))).rejects.toBe(conflict);
+    expect(renewals).toBe(0);
   });
 });
