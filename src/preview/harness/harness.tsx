@@ -21,7 +21,7 @@ import { addAPIProvider, addCollection } from "iconify-icon";
 // (custom properties cross the boundary; class rules don't). Without them,
 // shadow-side calc(var(--radius)+…) collapses — sharp corners, no border.
 import "@glasshome/ui/styles";
-import uiCss from "@glasshome/ui/styles?raw";
+import uiCss from "@glasshome/ui/styles?inline";
 // Fonts must load at the document (an @font-face in an adopted/shadow sheet
 // won't); the family name then inherits into the widget shadow. Same set dash's
 // styles.css loads.
