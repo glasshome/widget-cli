@@ -5,6 +5,15 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0](https://github.com/glasshome/widget-cli/compare/v0.17.4...v0.18.0) (2026-10-20)
+
+
+### Features
+
+* **login:** ask for a browser sign-in no older than a day ([ae77a8b](https://github.com/glasshome/widget-cli/commit/ae77a8b3f874e5fbdbf3d1fd9183ec4d04aaec9e))
+* **login:** ask for offline_access and renew once when the hub ends a token ([7cd3c52](https://github.com/glasshome/widget-cli/commit/7cd3c527c1b6bdb9c437b6b8c39d5846b47e02f5))
+* **login:** offline_access, a fresh sign-in, and one renewal on 401 ([19f6903](https://github.com/glasshome/widget-cli/commit/19f6903506c748918d82ee4bd8919d9e7050f0dc))
+
 ## [0.17.4](https://github.com/glasshome/widget-cli/compare/v0.17.3...v0.17.4) (2026-10-20)
 
 
