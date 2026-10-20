@@ -31,7 +31,12 @@ beforeAll(() => {
       if (path === "/garbled/api/widgets/dash-releases") {
         return Response.json([{ version: 1, stage: "nightly" }]);
       }
-      if (path === "/silent/api/widgets/dash-releases") return new Promise<Response>(() => {});
+      // Settles once the caller gives up, or server.stop waits on it past the hook timeout.
+      if (path === "/silent/api/widgets/dash-releases") {
+        return new Promise<Response>((resolve) =>
+          req.signal.addEventListener("abort", () => resolve(new Response(null, { status: 499 }))),
+        );
+      }
       return new Response("not found", { status: 404 });
     },
   });
