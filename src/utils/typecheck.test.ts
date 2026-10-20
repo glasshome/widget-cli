@@ -35,7 +35,8 @@ function findTypescript(): string | null {
 }
 
 const typescriptDir = findTypescript();
-const noTypescript = typescriptDir === null;
+// CI always has typescript, so there a missing compiler fails instead of skipping.
+const noTypescript = typescriptDir === null && !process.env.CI;
 
 let fixtureCount = 0;
 
