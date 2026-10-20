@@ -13,8 +13,26 @@ const REDIRECT_PORT = 9274;
 const REDIRECT_URI = `http://${REDIRECT_HOST}:${REDIRECT_PORT}/callback`;
 const LOGIN_TIMEOUT_MS = 120_000;
 
+// offline_access gets a refresh token, so a login renews for the hub's 30 days instead of ending after an hour.
+const SCOPE = "openid profile email offline_access widgets:publish";
+const SIGN_IN_MAX_AGE_SECONDS = 86_400;
+
 function base64url(buf: Buffer): string {
   return buf.toString("base64url");
+}
+
+export function authorizeUrl(hub: string, pkce: { challenge: string; state: string }): URL {
+  const url = new URL(`${hub}/api/auth/oauth2/authorize`);
+  url.searchParams.set("client_id", CLIENT_ID);
+  url.searchParams.set("redirect_uri", REDIRECT_URI);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("code_challenge", pkce.challenge);
+  url.searchParams.set("code_challenge_method", "S256");
+  url.searchParams.set("state", pkce.state);
+  url.searchParams.set("scope", SCOPE);
+  // The hub's 30 days count from the browser sign-in, so ask for one no older than a day.
+  url.searchParams.set("max_age", String(SIGN_IN_MAX_AGE_SECONDS));
+  return url;
 }
 
 export async function runLogin(hubUrl?: string): Promise<void> {
@@ -78,14 +96,7 @@ export async function runLogin(hubUrl?: string): Promise<void> {
     });
 
     server.listen(REDIRECT_PORT, REDIRECT_HOST, () => {
-      const authUrl = new URL(`${hub}/api/auth/oauth2/authorize`);
-      authUrl.searchParams.set("client_id", CLIENT_ID);
-      authUrl.searchParams.set("redirect_uri", REDIRECT_URI);
-      authUrl.searchParams.set("response_type", "code");
-      authUrl.searchParams.set("code_challenge", codeChallenge);
-      authUrl.searchParams.set("code_challenge_method", "S256");
-      authUrl.searchParams.set("state", state);
-      authUrl.searchParams.set("scope", "openid profile email widgets:publish");
+      const authUrl = authorizeUrl(hub, { challenge: codeChallenge, state });
 
       log.info(`Opening browser for login at ${hub}`);
       s.start("Waiting for browser login...");

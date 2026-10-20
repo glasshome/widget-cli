@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { cancel, log, select, spinner } from "@clack/prompts";
 import semver from "semver";
-import { getHubUrl, getToken } from "../utils/auth";
+import { getHubUrl, getToken, renewHubToken, renewingCaller } from "../utils/auth";
 import { confirmPublish, fetchScopes, requestPublish, uploadToR2 } from "../utils/hub-api";
 import { cancelled } from "../utils/prompt";
 import {
@@ -62,10 +62,16 @@ export async function runPublish(
   // Stop an unsupported CLI before it uploads against a protocol it predates.
   await enforceCliVersion(hubUrl);
 
-  const token = await authenticate(hubUrl);
+  const asHub = renewingCaller(await authenticate(hubUrl), () => renewHubToken(hubUrl));
 
   // Step 3: Select scope
-  const scopes = await fetchScopes(hubUrl, token);
+  let scopes: Awaited<ReturnType<typeof fetchScopes>>;
+  try {
+    scopes = await asHub((token) => fetchScopes(hubUrl, token));
+  } catch (err) {
+    log.error(errorMessage(err));
+    process.exit(1);
+  }
   if (scopes.length === 0) {
     log.error("No publishing scopes available. Ensure your account is properly set up.");
     process.exit(1);
@@ -238,21 +244,23 @@ export async function runPublish(
 
   let publishData: Awaited<ReturnType<typeof requestPublish>>;
   try {
-    publishData = await requestPublish(hubUrl, token, {
-      scope,
-      name: widgetName,
-      displayName: builtManifest.name,
-      description: builtManifest.description,
-      icon: builtManifest.icon,
-      minSize: builtManifest.minSize,
-      maxSize: builtManifest.maxSize,
-      sdkVersion: builtManifest.sdkVersion,
-      version,
-      bundleSize: bundleBuffer.byteLength,
-      sha256Hash,
-      ...(cssBuffer && cssSha256Hash ? { cssSize: cssBuffer.byteLength, cssSha256Hash } : {}),
-      manifestJson: JSON.stringify(builtManifest),
-    });
+    publishData = await asHub((token) =>
+      requestPublish(hubUrl, token, {
+        scope,
+        name: widgetName,
+        displayName: builtManifest.name,
+        description: builtManifest.description,
+        icon: builtManifest.icon,
+        minSize: builtManifest.minSize,
+        maxSize: builtManifest.maxSize,
+        sdkVersion: builtManifest.sdkVersion,
+        version,
+        bundleSize: bundleBuffer.byteLength,
+        sha256Hash,
+        ...(cssBuffer && cssSha256Hash ? { cssSize: cssBuffer.byteLength, cssSha256Hash } : {}),
+        manifestJson: JSON.stringify(builtManifest),
+      }),
+    );
   } catch (err) {
     if (err instanceof Error && "status" in err && err.status === 409) {
       s.stop(`${builtManifest.name}@${version} already published, bump version to republish`);
@@ -289,7 +297,7 @@ export async function runPublish(
 
   s.message(`Confirming ${builtManifest.name}...`);
   try {
-    const result = await confirmPublish(hubUrl, token, publishData.versionId);
+    const result = await asHub((token) => confirmPublish(hubUrl, token, publishData.versionId));
     s.stop(`Published ${builtManifest.name}@${version}`);
     log.info(`CDN: ${result.bundleUrl}`);
     if (result.cssUrl) log.info(`CSS: ${result.cssUrl}`);
