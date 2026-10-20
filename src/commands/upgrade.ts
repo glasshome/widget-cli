@@ -2,7 +2,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { log, spinner } from "@clack/prompts";
 import { installedGuide, writeAgentStubs } from "../utils/agent-guide";
-import { discoverWidgets, readManifest, writeManifest } from "../utils/manifest";
 import { getInstalledSdkVersion } from "../utils/sdk-version";
 import { runValidate } from "./validate";
 
@@ -53,22 +52,6 @@ function refreshAgentStubs(cwd: string): void {
       "The installed @glasshome/widget-sdk has no widget guide yet; your agent needs SDK 1.19 or later.",
     );
   }
-}
-
-/** Update sdkVersion in all manifest.json files. */
-function syncManifestSdkVersions(cwd: string, newVersion: string): void {
-  const widgets = discoverWidgets(cwd);
-  if (widgets.length === 0) return;
-
-  const sdkRange = `^${newVersion}`;
-  for (const name of widgets) {
-    const manifest = readManifest(cwd, name);
-    if (manifest.sdkVersion !== sdkRange) {
-      manifest.sdkVersion = sdkRange;
-      writeManifest(cwd, name, manifest);
-    }
-  }
-  log.info(`Updated sdkVersion to ${sdkRange} in ${widgets.length} manifest(s)`);
 }
 
 const SDK_PKG = "@glasshome/widget-sdk";
@@ -147,8 +130,6 @@ export async function runUpgrade(cwd: string, options: UpgradeOptions = {}): Pro
     const cleanCurrent = currentVersion.replace(/^[\^~]/, "");
     if (cleanCurrent === sdkVersion) {
       log.success(`Already up to date with workspace SDK (${sdkVersion})`);
-      // Still sync manifests in case they're out of date
-      syncManifestSdkVersions(cwd, sdkVersion);
       refreshAgentStubs(cwd);
       return;
     }
@@ -165,8 +146,6 @@ export async function runUpgrade(cwd: string, options: UpgradeOptions = {}): Pro
     }
     s.stop("Dependencies synced");
 
-    // Sync sdkVersion in all manifest.json files
-    syncManifestSdkVersions(cwd, sdkVersion);
     refreshAgentStubs(cwd);
 
     // Run validate to check compatibility
@@ -180,17 +159,13 @@ export async function runUpgrade(cwd: string, options: UpgradeOptions = {}): Pro
     return;
   }
 
-  // Standalone project: bump the dependency, then sync every manifest to what
-  // is now installed. A manifest range that excludes the installed SDK fails
-  // validation, and this is the command that error tells people to run.
   if (!bumpSdkDependency(cwd, section, options.to ?? "latest")) process.exit(1);
 
   const installed = getInstalledSdkVersion(cwd);
   if (!installed) {
-    log.warn("No @glasshome/widget-sdk installed here, so manifests were left alone.");
+    log.warn("No @glasshome/widget-sdk installed here.");
     return;
   }
-  syncManifestSdkVersions(cwd, installed);
   refreshAgentStubs(cwd);
   const valid = await runValidate(cwd);
   if (valid) {

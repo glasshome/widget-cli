@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { cancel, log, select, spinner } from "@clack/prompts";
+import { cancel, confirm, log, select, spinner } from "@clack/prompts";
 import semver from "semver";
 import { getHubUrl, getToken, renewHubToken, renewingCaller } from "../utils/auth";
 import { confirmPublish, fetchScopes, requestPublish, uploadToR2 } from "../utils/hub-api";
@@ -13,6 +13,7 @@ import {
   readManifest,
   writeManifest,
 } from "../utils/manifest";
+import { settleSdkFloor } from "../utils/sdk-floor";
 import { typecheckAndReport } from "../utils/typecheck";
 import { enforceCliVersion } from "../utils/version";
 import { runLogin } from "./login";
@@ -21,6 +22,7 @@ interface PublishOptions {
   name?: string;
   bump?: "keep" | "patch" | "minor" | "major";
   scope?: string;
+  allowPrereleaseDash?: boolean;
 }
 
 async function authenticate(hubUrl: string): Promise<string> {
@@ -202,6 +204,20 @@ export async function runPublish(
     process.exit(1);
   }
   s.stop("Build complete");
+
+  const floor = await settleSdkFloor(cwd, widgetName, hubUrl, {
+    info: (line) => log.info(line),
+    confirm: async (message) => {
+      const answer = await confirm({ message, initialValue: false });
+      return !cancelled(answer) && answer;
+    },
+    interactive: process.stdin.isTTY === true,
+    allowPrereleaseDash: options?.allowPrereleaseDash === true,
+  });
+  if (!floor.ok) {
+    log.error(floor.message);
+    process.exit(1);
+  }
 
   // Validate AFTER the build, not before: the build is what produces the
   // manifest and bundle that get published, so validating beforehand checks a
