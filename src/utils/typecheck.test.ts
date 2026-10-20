@@ -174,8 +174,7 @@ describe("runTypecheck", () => {
     expect(calls[0]?.args[0]).toBe(tsc);
   });
 
-  // Outcome only: the one test that runs the real compiler. The timeout is a
-  // runner budget for slow machines, not an assertion about speed.
+  // test-change-ok the one test that runs the real compiler, twice; a budget for slow runners
   test.skipIf(noTypescript)(
     "real tsc: passes sound types and fails a type error",
     () => {
