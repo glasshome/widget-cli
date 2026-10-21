@@ -61,15 +61,45 @@ export const DEFAULT_SIZES: Box[] = [70, 156, 242, 328].flatMap((height) =>
 // Inverse of the harness's tilePx height: rows * 70 + (rows - 1) * 16.
 const rowsFor = (height: number) => Math.round((height + 16) / 86);
 
-// Roots stay closed as in dash, so a handler that cannot fire there fails here too; --eval and --click reach in through this.
-function keepShadowRoots(): void {
-  // oxlint-disable-next-line typescript/unbound-method -- captured to re-call with .call(this) from the patch
-  const attach = Element.prototype.attachShadow;
-  Element.prototype.attachShadow = function (init) {
-    const root = attach.call(this, init);
-    Object.defineProperty(this, "__widgetRoot", { value: root });
-    return root;
-  };
+interface DomNode {
+  backendNodeId: number;
+  shadowRoots?: DomNode[];
+}
+
+// Roots stay closed as in dash; --eval and --click reach in through Chromium's own view over CDP, as dash's byRole does.
+async function callOnWidgetRoot(
+  page: Page,
+  functionDeclaration: string,
+  args: unknown[] = [],
+): Promise<unknown> {
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    const { root: doc } = await cdp.send("DOM.getDocument", { depth: 0 });
+    const { nodeId } = await cdp.send("DOM.querySelector", {
+      nodeId: doc.nodeId,
+      selector: "#stage",
+    });
+    const host = nodeId
+      ? ((await cdp.send("DOM.describeNode", { nodeId, depth: 1, pierce: true })).node as DomNode)
+      : undefined;
+    const shadow = host?.shadowRoots?.[0];
+    const target = shadow
+      ? await cdp.send("DOM.resolveNode", { backendNodeId: shadow.backendNodeId })
+      : await cdp.send("Runtime.evaluate", { expression: "globalThis" });
+    const objectId = "object" in target ? target.object.objectId : target.result.objectId;
+    const { result, exceptionDetails } = await cdp.send("Runtime.callFunctionOn", {
+      objectId,
+      functionDeclaration: `function (...args) { return (${functionDeclaration})(${shadow ? "this" : "undefined"}, ...args); }`,
+      arguments: args.map((value) => ({ value })),
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (exceptionDetails)
+      throw new Error(exceptionDetails.exception?.description ?? exceptionDetails.text);
+    return result.value;
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
 }
 
 export async function runSweep(opts: SweepOptions): Promise<SweepSummary> {
@@ -95,7 +125,6 @@ export async function runSweep(opts: SweepOptions): Promise<SweepSummary> {
 
   const render = async (page: Page, url: string, file: string): Promise<unknown> => {
     watchEgress(page, server.origin);
-    await page.addInitScript(keepShadowRoots);
     if (opts.at) await page.clock.install({ time: opts.at });
     else await freezeClock(page);
     await page.goto(url, { waitUntil: "domcontentloaded" });
@@ -108,20 +137,21 @@ export async function runSweep(opts: SweepOptions): Promise<SweepSummary> {
     if (opts.click) {
       // Playwright's actionability checks wait on animation frames, which a frozen clock never runs.
       await page.clock.resume();
-      const at = await page.evaluate((selector) => {
-        const stage = document.getElementById("stage") as { __widgetRoot?: ShadowRoot } | null;
-        const box = stage?.__widgetRoot?.querySelector(selector)?.getBoundingClientRect();
-        return box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : null;
-      }, opts.click);
+      const at = (await callOnWidgetRoot(
+        page,
+        `function (root, selector) {
+          const box = root?.querySelector(selector)?.getBoundingClientRect();
+          return box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : null;
+        }`,
+        [opts.click],
+      )) as { x: number; y: number } | null;
       if (!at) throw new Error(`--click: nothing matches ${opts.click} inside the widget`);
       await page.mouse.click(at.x, at.y);
       await settleAnimations(page, 1_500);
     }
     await page.locator("#stage").screenshot({ path: file, omitBackground: true });
     if (!opts.evaluate) return undefined;
-    return page.evaluate(
-      `(function (root) { return (${opts.evaluate}); })(document.getElementById("stage")?.__widgetRoot)`,
-    );
+    return callOnWidgetRoot(page, `function (root) { return (${opts.evaluate}); }`);
   };
 
   try {
