@@ -5,6 +5,22 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0](https://github.com/glasshome/widget-cli/compare/v0.18.0...v0.19.0) (2026-10-22)
+
+
+### Features
+
+* **cli:** publish derives the sdkVersion floor from the built bundle ([5b135b1](https://github.com/glasshome/widget-cli/commit/5b135b12ebf52be32fdc9c4a33d73e08989154e2))
+* publish derives the sdkVersion floor from the built bundle ([2e35520](https://github.com/glasshome/widget-cli/commit/2e35520362197c2adf0765ec43e1342fcf0fc98e))
+
+
+### Bug Fixes
+
+* **cli:** floor settles reach before writing, follows real imports only, never hangs without a terminal ([e07566f](https://github.com/glasshome/widget-cli/commit/e07566f8c1edee81aed3dff04048b35356fbd998))
+* **deps:** pin @glasshome/sync-layer 0.12.4 and @glasshome/widget-sdk 1.25.0 ([0ad2764](https://github.com/glasshome/widget-cli/commit/0ad276490712d9585f03a6ab2907dd8e9a7d6fde))
+* **deps:** widget-contract 0.5.0 ([bd2150c](https://github.com/glasshome/widget-cli/commit/bd2150c35b10f973c5ca96b2f1d991f1fdbaf452))
+* **preview:** the sweep reaches closed widget roots through CDP, with no attachShadow patch or __widgetRoot on the host ([d7a8fcf](https://github.com/glasshome/widget-cli/commit/d7a8fcf9bd95117423bcfa0fb1e2dd12faba04e6))
+
 ## [0.18.0](https://github.com/glasshome/widget-cli/compare/v0.17.4...v0.18.0) (2026-10-20)
 
 
