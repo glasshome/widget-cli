@@ -1,4 +1,8 @@
-import type { ReactiveWidgetContext, WidgetDefinition } from "@glasshome/widget-sdk";
+import {
+  injectTokens,
+  type ReactiveWidgetContext,
+  type WidgetDefinition,
+} from "@glasshome/widget-sdk";
 import { instantiateWidget } from "@glasshome/widget-sdk/host";
 import { callService, claimHostApi, getEntityView } from "@glasshome/sync-layer";
 import { byDomain, useAreas, useEntities } from "@glasshome/sync-layer/solid";
@@ -75,6 +79,9 @@ const entityDataAdapter: EntityDataAdapter = {
   useAreas,
 };
 provideEntityData(entityDataAdapter);
+
+// Sheets and dialogs render outside the widget's shadow root, so their rules come from the document, as in dash's main.tsx.
+injectTokens(document);
 
 // Every built widget bundle + its CSS, selected by the `?widget=` param. Glob
 // keeps the imports static-analyzable while staying widget-agnostic — the same
