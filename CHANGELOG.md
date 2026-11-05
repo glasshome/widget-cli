@@ -5,6 +5,13 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0](https://github.com/glasshome/widget-cli/compare/v0.19.6...v0.20.0) (2026-11-05)
+
+
+### Features
+
+* **preview:** previews run the sealed stage a dash serves ([#65](https://github.com/glasshome/widget-cli/issues/65)) ([dac8d06](https://github.com/glasshome/widget-cli/commit/dac8d0618730662d2be02c6d326318165956699e))
+
 ## [0.19.6](https://github.com/glasshome/widget-cli/compare/v0.19.5...v0.19.6) (2026-11-05)
 
 
