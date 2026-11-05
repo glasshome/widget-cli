@@ -241,8 +241,10 @@ export async function fetchStage(
   if (verifiedEntry(dir)) return { dir, sdkVersion: manifest.sdkVersion, from: "cache" };
 
   mkdirSync(cacheRoot, { recursive: true });
-  if (existsSync(dir))
+  if (existsSync(dir)) {
+    if (verifiedEntry(dir)) return { dir, sdkVersion: manifest.sdkVersion, from: "cache" };
     renameSync(dir, `${dir}.stale-${process.pid}-${randomBytes(4).toString("hex")}`);
+  }
   await downloadInto(base, manifest, manifestBytes, dir);
   for (const name of readdirSync(cacheRoot))
     if (name.startsWith(`${basename(dir)}.stale-${process.pid}-`))
