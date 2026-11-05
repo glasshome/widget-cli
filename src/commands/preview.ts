@@ -1,12 +1,15 @@
 import { log } from "@clack/prompts";
 import color from "picocolors";
 import type { Box, Theme } from "../preview/sweep";
+import { type ScalarConfig, parseScalarConfig } from "../preview/scalar-config";
+import { DEFAULT_DASH } from "../preview/stage";
 import { withQuietStdout } from "../utils/quiet";
 
 /**
  * Screenshot every widget's authored examples (light + dark) into
- * `<project>/preview/`, rendered through the same constraints as the hub's
- * render worker: frozen clock, DNS blackhole, per-render timeout, hash pin.
+ * `<project>/preview/`, rendered on the sealed stage a dash serves, under the same
+ * constraints as the hub's render worker: pinned date, DNS blackhole, per-render
+ * timeout, hash pin.
  *
  * Playwright is an optional peer: check for it before importing anything that loads it.
  */
@@ -26,7 +29,12 @@ const progress = (m: string) => {
   process.stdout.write(`${color.gray("│")}  ${color.dim(m)}\n`);
 };
 
-export async function runPreview(cwd: string, names: string[], isolate: boolean): Promise<void> {
+export async function runPreview(
+  cwd: string,
+  names: string[],
+  isolate: boolean,
+  dashUrl: string = DEFAULT_DASH,
+): Promise<void> {
   await requirePlaywright();
   const { capturePreviews } = await import("../preview/capture");
 
@@ -35,7 +43,7 @@ export async function runPreview(cwd: string, names: string[], isolate: boolean)
   let summary: Awaited<ReturnType<typeof capturePreviews>>;
   try {
     summary = await withQuietStdout(() =>
-      capturePreviews({ projectDir: cwd, only: names, isolate, onProgress: progress }),
+      capturePreviews({ projectDir: cwd, dashUrl, only: names, isolate, onProgress: progress }),
     );
   } catch (err) {
     log.error(err instanceof Error ? err.message : String(err));
@@ -100,9 +108,7 @@ export async function runPreview(cwd: string, names: string[], isolate: boolean)
     );
   }
 
-  // Vite's dev server leaves live handles behind (file watchers, keep-alive
-  // sockets from browsers that crashed mid-render), so the process would sit
-  // idle forever after the verdict instead of exiting. Leave deliberately.
+  // Sockets from browsers that crashed mid-render can outlive the run; leave deliberately.
   process.exit(hangs.length || integrity.length || crashes.length ? 1 : 0);
 }
 
@@ -149,12 +155,12 @@ function parseThemes(value: string | undefined): Theme[] {
   return themes as Theme[];
 }
 
-function parseConfig(value: string | undefined): Record<string, unknown> | undefined {
+function parseConfig(value: string | undefined): ScalarConfig | undefined {
   if (!value) return undefined;
   try {
-    return JSON.parse(value);
-  } catch {
-    fail(`--config must be a JSON object (got ${value})`);
+    return parseScalarConfig(value);
+  } catch (err) {
+    fail(err instanceof Error ? err.message : String(err));
   }
 }
 
@@ -167,6 +173,7 @@ export async function runSweepPreview(
   cwd: string,
   names: string[],
   flags: SweepFlags,
+  dashUrl: string = DEFAULT_DASH,
 ): Promise<void> {
   await requirePlaywright();
   const { DEFAULT_SIZES, runSweep } = await import("../preview/sweep");
@@ -180,6 +187,7 @@ export async function runSweepPreview(
   const summary = await withQuietStdout(() =>
     runSweep({
       projectDir: cwd,
+      dashUrl,
       only: names,
       themes: parseThemes(flags.theme),
       examples,
