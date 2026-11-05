@@ -1,6 +1,7 @@
 import { log } from "@clack/prompts";
 import color from "picocolors";
 import type { Box, Theme } from "../preview/sweep";
+import { type ScalarConfig, parseScalarConfig } from "../preview/scalar-config";
 import { DEFAULT_DASH } from "../preview/stage";
 import { withQuietStdout } from "../utils/quiet";
 
@@ -154,12 +155,12 @@ function parseThemes(value: string | undefined): Theme[] {
   return themes as Theme[];
 }
 
-function parseConfig(value: string | undefined): Record<string, unknown> | undefined {
+function parseConfig(value: string | undefined): ScalarConfig | undefined {
   if (!value) return undefined;
   try {
-    return JSON.parse(value);
-  } catch {
-    fail(`--config must be a JSON object (got ${value})`);
+    return parseScalarConfig(value);
+  } catch (err) {
+    fail(err instanceof Error ? err.message : String(err));
   }
 }
 

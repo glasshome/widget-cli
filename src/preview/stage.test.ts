@@ -106,3 +106,58 @@ test("a cached file edited on disk is fetched again", async () => {
 test("plain http is refused except on loopback", async () => {
   await expect(fetchStage("http://home.lan:3124", tmp(), "^1.0.0")).rejects.toThrow("https");
 });
+
+test("a dash that redirects to another origin is refused, never followed", async () => {
+  const elsewhere = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => Response.json({}) });
+  try {
+    dash = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: () => Response.redirect(`${elsewhere.url.href}stage/manifest.json`, 302),
+    });
+    await expect(fetchStage(url(), tmp(), "^1.0.0")).rejects.toThrow("redirected");
+  } finally {
+    await elsewhere.stop(true);
+  }
+});
+
+test("a body past the cap is cut off while it streams", async () => {
+  dash = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    fetch: () =>
+      new Response(
+        new ReadableStream({
+          pull(controller) {
+            controller.enqueue(new Uint8Array(256 * 1024));
+          },
+        }),
+      ),
+  });
+  await expect(fetchStage(url(), tmp(), "^1.0.0")).rejects.toThrow("larger than the stage allows");
+});
+
+test("paths that differ only in case are refused", async () => {
+  serveManifest({ stageVersion: 1, sdkVersion: "1.30.0", files: { "A.js": SHA, "a.js": SHA } });
+  await expect(fetchStage(url(), tmp(), "^1.0.0")).rejects.toThrow("collides");
+});
+
+test("a cached entry whose manifest is not the one its folder names is not trusted", async () => {
+  serve({});
+  const root = tmp();
+  const first = await fetchStage(url(), root, "^1.0.0");
+  const other = { stageVersion: 1, sdkVersion: "1.30.0", files: {} };
+  await Bun.write(join(first.dir, "manifest.json"), JSON.stringify(other));
+  expect((await fetchStage(url(), root, "^1.0.0")).from).toBe("network");
+});
+
+test("two first runs at once both end with the verified stage", async () => {
+  serve({});
+  const root = tmp();
+  const [a, b] = await Promise.all([
+    fetchStage(url(), root, "^1.0.0"),
+    fetchStage(url(), root, "^1.0.0"),
+  ]);
+  expect(a.dir).toBe(b.dir);
+  expect(await Bun.file(join(a.dir, "stage.js")).text()).toBe(FILES["stage.js"]);
+});

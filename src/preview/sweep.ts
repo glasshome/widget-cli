@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Page } from "playwright";
 import { slug } from "./capture";
+import type { ScalarConfig } from "./scalar-config";
 import {
   awaitStage,
   pinDate,
@@ -30,7 +31,7 @@ export interface SweepOptions {
   /** Pixel boxes to render; each example's own size when empty. */
   sizes: Box[];
   at?: Date;
-  config?: Record<string, unknown>;
+  config?: ScalarConfig;
   /** `domain.service|entity_id|json`, replayed against the demo home before mount. */
   services: string[];
   click?: string;

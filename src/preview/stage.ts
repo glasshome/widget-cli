@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { systemClock, withDeadline } from "@glasshome/widget-contract/clock";
 import semver from "semver";
 
@@ -58,18 +58,48 @@ function stageBase(dashUrl: string): URL {
 }
 
 export function stageCacheRoot(dashUrl: string): string {
+  stageBase(dashUrl);
   const base = process.env.XDG_CACHE_HOME || join(homedir(), ".cache");
   return join(base, "glasshome", "stage", new URL(dashUrl).host.replace(/[^A-Za-z0-9.-]/g, "_"));
+}
+
+class StageRefused extends Error {}
+
+async function readCapped(res: Response, url: URL, limit: number, abort: AbortController) {
+  const tooBig = () => {
+    abort.abort();
+    return new StageRefused(`${url.pathname}: larger than the stage allows`);
+  };
+  if (Number(res.headers.get("content-length") ?? 0) > limit) throw tooBig();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  const reader = res.body?.getReader();
+  for (;;) {
+    const part = await reader?.read();
+    if (!part || part.done) break;
+    total += part.value.length;
+    if (total > limit) throw tooBig();
+    chunks.push(part.value);
+  }
+  const bytes = new Uint8Array(total);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.length;
+  }
+  return bytes;
 }
 
 async function download(url: URL, limit: number): Promise<Uint8Array> {
   const abort = new AbortController();
   const work = (async () => {
-    const res = await fetch(url, { signal: abort.signal });
+    const res = await fetch(url, { signal: abort.signal, redirect: "manual" });
+    if (res.status >= 300 && res.status < 400)
+      throw new StageRefused(
+        `${url.pathname}: the dash redirected; a stage is served from the dash itself`,
+      );
     if (!res.ok) throw new Error(`${url.pathname}: the dash answered ${res.status}`);
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    if (bytes.length > limit) throw new Error(`${url.pathname}: larger than the stage allows`);
-    return bytes;
+    return readCapped(res, url, limit, abort);
   })();
   const result = await withDeadline(systemClock, work, FILE_DEADLINE_MS).catch((err: unknown) => {
     abort.abort();
@@ -101,6 +131,12 @@ function parseManifest(bytes: Uint8Array): StageManifest {
     throw new Error("the stage manifest lists no files");
   const paths = Object.keys(m.files);
   if (paths.length > MAX_FILES) throw new Error(`the stage lists more than ${MAX_FILES} files`);
+  const lower = new Set<string>();
+  for (const path of paths) {
+    if (lower.has(path.toLowerCase()))
+      throw new Error(`${path}: collides with another path in the stage`);
+    lower.add(path.toLowerCase());
+  }
   for (const path of paths) {
     const sha = m.files[path];
     if (!STAGE_PATH.test(path) || path.split("/").some((s) => s === "." || s === ".."))
@@ -120,7 +156,9 @@ function assertSdk(manifest: StageManifest, range: string): void {
 
 function verifiedEntry(dir: string): StageManifest | null {
   try {
-    const manifest = parseManifest(readFileSync(join(dir, MANIFEST_NAME)));
+    const manifestBytes = readFileSync(join(dir, MANIFEST_NAME));
+    if (sha256(manifestBytes) !== basename(dir)) return null;
+    const manifest = parseManifest(manifestBytes);
     for (const [path, sha] of Object.entries(manifest.files))
       if (sha256(readFileSync(join(dir, path))) !== sha) return null;
     return manifest;
@@ -148,8 +186,7 @@ async function downloadInto(
   manifestBytes: Uint8Array,
   dir: string,
 ) {
-  const staging = `${dir}.tmp-${process.pid}`;
-  rmSync(staging, { recursive: true, force: true });
+  const staging = `${dir}.tmp-${process.pid}-${randomBytes(4).toString("hex")}`;
   try {
     let left = MAX_BYTES;
     for (const [path, sha] of Object.entries(manifest.files)) {
@@ -162,10 +199,13 @@ async function downloadInto(
     }
     mkdirSync(staging, { recursive: true });
     writeFileSync(join(staging, MANIFEST_NAME), manifestBytes);
-    renameSync(staging, dir);
-  } catch (err) {
+    try {
+      renameSync(staging, dir);
+    } catch (err) {
+      if (!verifiedEntry(dir)) throw err;
+    }
+  } finally {
     rmSync(staging, { recursive: true, force: true });
-    throw err;
   }
 }
 
@@ -182,6 +222,7 @@ export async function fetchStage(
   try {
     manifestBytes = await download(new URL(MANIFEST_NAME, base), 1024 * 1024);
   } catch (err) {
+    if (err instanceof StageRefused) throw err;
     const cached = newestVerified(cacheRoot);
     if (!cached)
       throw new Error(
@@ -199,13 +240,34 @@ export async function fetchStage(
   const dir = join(cacheRoot, sha256(manifestBytes));
   if (verifiedEntry(dir)) return { dir, sdkVersion: manifest.sdkVersion, from: "cache" };
 
-  rmSync(dir, { recursive: true, force: true });
   mkdirSync(cacheRoot, { recursive: true });
+  if (existsSync(dir))
+    renameSync(dir, `${dir}.stale-${process.pid}-${randomBytes(4).toString("hex")}`);
   await downloadInto(base, manifest, manifestBytes, dir);
+  for (const name of readdirSync(cacheRoot))
+    if (name.startsWith(`${basename(dir)}.stale-${process.pid}-`))
+      rmSync(join(cacheRoot, name), { recursive: true, force: true });
   return { dir, sdkVersion: manifest.sdkVersion, from: "network" };
 }
 
-export function stageFiles(stage: StageDir): Map<string, string> {
-  const manifest = parseManifest(readFileSync(join(stage.dir, MANIFEST_NAME)));
-  return new Map(Object.keys(manifest.files).map((path) => [path, join(stage.dir, path)]));
+/** The stage's bytes, read once and hashed again, so what is served is what the manifest names. */
+export function readStage(stage: StageDir): Map<string, Uint8Array> {
+  const manifestBytes = readFileSync(join(stage.dir, MANIFEST_NAME));
+  if (sha256(manifestBytes) !== basename(stage.dir))
+    throw new Error("the cached stage does not match its manifest");
+  const files = new Map<string, Uint8Array>();
+  for (const [path, sha] of Object.entries(parseManifest(manifestBytes).files)) {
+    const bytes = readFileSync(join(stage.dir, path));
+    if (sha256(bytes) !== sha) throw new Error(`${path}: sha-256 differs from the manifest`);
+    files.set(path, bytes);
+  }
+  return files;
+}
+
+/** Throws naming `label` when the stage's SDK is outside `range`. */
+export function assertWidgetSdk(stage: StageDir, label: string, range: string): void {
+  if (!semver.satisfies(stage.sdkVersion, range))
+    throw new Error(
+      `${label}: the stage runs SDK ${stage.sdkVersion}, outside the widget's sdkVersion ${range}`,
+    );
 }
