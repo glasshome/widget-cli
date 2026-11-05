@@ -41,7 +41,9 @@ export interface EgressLock {
  * closer analogue of the container egress allowlist the worker will actually
  * rely on.
  */
-const NO_EGRESS_ARGS = ["--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost"];
+const NO_EGRESS_ARGS = [
+  "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1",
+];
 
 /** `CHROMIUM_PATH` points at a system Chromium where Playwright's own build is absent or cannot run. */
 const launchLocked = () =>
@@ -91,39 +93,51 @@ export function hashWidgetArtifacts(distDir: string, widget: string): string {
   return hash.digest("hex");
 }
 
-/**
- * Fixed wall-clock instant every render starts from: a bright weekday midday, so
- * time-of-day-dependent widgets (clock, weather, sun-driven energy) land in a
- * flattering, stable state instead of drifting with the run.
- */
-const FROZEN_TIME = new Date("2026-06-15T12:34:00Z");
+/** The stage's own default instant; `pinDate` and the stage's demo house agree on it. */
+const STAGE_TIME = new Date("2026-06-21T12:00:00Z");
 
-/**
- * Freeze time, then step it forward deliberately.
- *
- * Widgets gate their mount animation behind `requestAnimationFrame(() =>
- * setMounted(true))` (sensor/sparkline.tsx, weather/forecast-chart.tsx). A
- * fully paused clock never fires that callback, so those widgets would be
- * screenshotted in their pre-mount state — or wait forever and die to the
- * timeout. Installing the clock and then running it forward a short, fixed
- * amount fires the rAF callbacks and any mount transition, while keeping the
- * result byte-identical between runs.
- */
-export async function freezeClock(page: Page): Promise<void> {
-  await page.clock.install({ time: FROZEN_TIME });
+/** The page's `Date` reads `at`; timers and `performance` stay real, as in a home. */
+export async function pinDate(page: Page, at: Date = STAGE_TIME): Promise<void> {
+  await page.clock.setFixedTime(at);
 }
 
-/** Advance the frozen clock enough to settle rAF-gated mount animations. */
 export class WidgetCrash extends Error {}
 
-/** Throws when the harness recorded a widget crash during mount. */
-export async function assertNoCrash(page: Page): Promise<void> {
-  const crash = await page.evaluate(() => document.documentElement.dataset.harnessCrash);
-  if (crash) throw new WidgetCrash(`widget crashed: ${crash}`);
+/** Waits until the stage is ready or has reported why it will not be. */
+export async function awaitStage(page: Page, timeout = 20_000): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const d = document.documentElement.dataset;
+      return Boolean(d.harnessReady || d.harnessCrash || d.harnessError || d.harnessStopped);
+    },
+    undefined,
+    { timeout },
+  );
+  await assertNoCrash(page);
 }
 
-export async function settleAnimations(page: Page, ms = 1_000): Promise<void> {
-  await page.clock.runFor(ms);
+/** Throws when the stage recorded a crash, a refused page or a stopped widget. */
+async function assertNoCrash(page: Page): Promise<void> {
+  const d = await page.evaluate(() => {
+    const { harnessCrash, harnessStopped, harnessError } = document.documentElement.dataset;
+    return { harnessCrash, harnessStopped, harnessError };
+  });
+  if (d.harnessCrash) throw new WidgetCrash(`widget crashed: ${d.harnessCrash}`);
+  if (d.harnessStopped) throw new WidgetCrash(`widget stopped: ${d.harnessStopped}`);
+  if (d.harnessError) throw new WidgetCrash(`stage refused: ${d.harnessError}`);
+}
+
+/** Lets the page paint what a press changed. */
+export async function settleFrames(page: Page, frames = 30): Promise<void> {
+  await page.evaluate(
+    (n) =>
+      new Promise<void>((done) => {
+        const step = (left: number) =>
+          left === 0 ? done() : requestAnimationFrame(() => step(left - 1));
+        step(n);
+      }),
+    frames,
+  );
 }
 
 /** Reject if a render exceeds the cap, so a hang surfaces as a failure rather

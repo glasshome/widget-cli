@@ -3,14 +3,15 @@ import { resolve } from "node:path";
 import type { Page } from "playwright";
 import { slug } from "./capture";
 import {
-  assertNoCrash,
-  freezeClock,
-  settleAnimations,
+  awaitStage,
+  pinDate,
+  settleFrames,
+  WidgetCrash,
   watchEgress,
   withRenderTimeout,
   withSharedBrowser,
 } from "./constraints";
-import { serveHarness } from "./serve";
+import { serveHarness, stageUrl } from "./serve";
 
 export type Theme = "light" | "dark";
 
@@ -21,6 +22,7 @@ export interface Box {
 
 export interface SweepOptions {
   projectDir: string;
+  dashUrl: string;
   only: string[];
   themes: Theme[];
   /** Example indexes to render; all when empty. */
@@ -58,7 +60,7 @@ export const DEFAULT_SIZES: Box[] = [70, 156, 242, 328].flatMap((height) =>
   [84, 150, 200, 270, 340, 420].map((width) => ({ width, height })),
 );
 
-// Inverse of the harness's tilePx height: rows * 70 + (rows - 1) * 16.
+// Inverse of the stage lattice's height: rows * 70 + (rows - 1) * 16.
 const rowsFor = (height: number) => Math.round((height + 16) / 86);
 
 interface DomNode {
@@ -77,7 +79,7 @@ async function callOnWidgetRoot(
     const { root: doc } = await cdp.send("DOM.getDocument", { depth: 0 });
     const { nodeId } = await cdp.send("DOM.querySelector", {
       nodeId: doc.nodeId,
-      selector: "#stage",
+      selector: "#stage > div",
     });
     const host = nodeId
       ? ((await cdp.send("DOM.describeNode", { nodeId, depth: 1, pierce: true })).node as DomNode)
@@ -107,36 +109,28 @@ export async function runSweep(opts: SweepOptions): Promise<SweepSummary> {
   const report = opts.onResult ?? (() => {});
   const projectDir = resolve(opts.projectDir);
   const outDir = resolve(projectDir, "preview", "sweep");
-  const server = await serveHarness(projectDir, opts.only, progress);
+  const server = await serveHarness(projectDir, opts.only, opts.dashUrl, progress, progress);
   const failures: string[] = [];
   let shots = 0;
   let sheets = 0;
 
-  const query = (widget: string, ex: number, theme: Theme, box?: Box) => {
-    const q = new URLSearchParams({ widget, ex: String(ex), theme });
-    if (box) {
-      q.set("pw", String(box.width));
-      q.set("ph", String(box.height));
-    }
-    if (opts.config) q.set("cfg", JSON.stringify(opts.config));
-    for (const s of opts.services) q.append("svc", s);
-    return `${server.base}?${q}`;
-  };
+  const query = (widget: string, ex: number, theme: Theme, box?: Box) =>
+    stageUrl(server, {
+      widget,
+      ex,
+      theme,
+      box,
+      config: opts.config,
+      services: opts.services,
+      at: opts.at,
+    });
 
   const render = async (page: Page, url: string, file: string): Promise<unknown> => {
     watchEgress(page, server.origin);
-    if (opts.at) await page.clock.install({ time: opts.at });
-    else await freezeClock(page);
+    await pinDate(page, opts.at);
     await page.goto(url, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector("html[data-harness-ready='1']", {
-      state: "attached",
-      timeout: 20_000,
-    });
-    await settleAnimations(page);
-    await assertNoCrash(page);
+    await awaitStage(page);
     if (opts.click) {
-      // Playwright's actionability checks wait on animation frames, which a frozen clock never runs.
-      await page.clock.resume();
       const at = (await callOnWidgetRoot(
         page,
         `function (root, selector) {
@@ -147,7 +141,7 @@ export async function runSweep(opts: SweepOptions): Promise<SweepSummary> {
       )) as { x: number; y: number } | null;
       if (!at) throw new Error(`--click: nothing matches ${opts.click} inside the widget`);
       await page.mouse.click(at.x, at.y);
-      await settleAnimations(page, 1_500);
+      await settleFrames(page);
     }
     await page.locator("#stage").screenshot({ path: file, omitBackground: true });
     if (!opts.evaluate) return undefined;
@@ -162,15 +156,16 @@ export async function runSweep(opts: SweepOptions): Promise<SweepSummary> {
         let examples: Example[] = [];
         let bounds: Bounds | undefined;
         try {
-          await probe.goto(query(widget, 0, "light"), { waitUntil: "domcontentloaded" });
-          await probe.waitForSelector("html[data-harness-bounds]", {
-            state: "attached",
-            timeout: 30_000,
-          });
+          await probe.goto(query(widget, -1, "light"), { waitUntil: "domcontentloaded" });
+          await awaitStage(probe, 30_000);
           examples = JSON.parse(
             (await probe.getAttribute("html", "data-harness-examples")) ?? "[]",
           );
           bounds = JSON.parse((await probe.getAttribute("html", "data-harness-bounds")) ?? "null");
+        } catch (err) {
+          if (!(err instanceof WidgetCrash)) throw err;
+          failures.push(`${widget}: ${err.message}`);
+          continue;
         } finally {
           await probe.context().close();
         }

@@ -29,6 +29,7 @@ Commands:
                          --re-auth discards stored credentials and re-runs device approval
   preview [name...]      Screenshot widgets' examples (light + dark) into preview/
                          --isolate gives every render its own browser process
+                         --dash <url> runs the stage that dash serves (default https://demo.glasshome.app)
                          --sizes <WxH,...|grid> renders at pixel sizes into preview/sweep/, with a
                            contact sheet per example (grid: common dashboard sizes)
                          --theme light|dark, --example <n,...> narrow the render
@@ -85,6 +86,7 @@ const { values: flags, positionals } = parseArgs({
     "re-auth": { type: "boolean" },
     "allow-prerelease-dash": { type: "boolean" },
     isolate: { type: "boolean" },
+    dash: { type: "string" },
     sizes: { type: "string" },
     theme: { type: "string" },
     example: { type: "string" },
@@ -179,8 +181,9 @@ switch (effectiveCommand) {
       click: str(flags.click),
       eval: str(flags.eval),
     };
-    if (wantsSweep(sweep)) await runSweepPreview(widgetDir, args, sweep);
-    else await runPreview(widgetDir, args, flags.isolate === true);
+    const dash = str(flags.dash);
+    if (wantsSweep(sweep)) await runSweepPreview(widgetDir, args, sweep, dash);
+    else await runPreview(widgetDir, args, flags.isolate === true, dash);
     break;
   }
 

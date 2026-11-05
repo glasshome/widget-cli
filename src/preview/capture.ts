@@ -1,18 +1,17 @@
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  freezeClock,
+  awaitStage,
   hashWidgetArtifacts,
-  settleAnimations,
+  pinDate,
   type SharedBrowser,
   WidgetCrash,
-  assertNoCrash,
   watchEgress,
   withFreshBrowser,
   withRenderTimeout,
   withSharedBrowser,
 } from "./constraints";
-import { serveHarness } from "./serve";
+import { serveHarness, stageUrl } from "./serve";
 
 const THEMES = ["light", "dark"] as const;
 
@@ -38,6 +37,8 @@ export interface PreviewOptions {
   projectDir: string;
   only?: string[];
   isolate?: boolean;
+  /** The dash whose stage renders the widgets. */
+  dashUrl: string;
   /** Phase updates for a caller-owned spinner; build + vite output is silenced. */
   onProgress?: (message: string) => void;
 }
@@ -63,8 +64,8 @@ export async function capturePreviews(opts: PreviewOptions): Promise<PreviewSumm
   const progress = opts.onProgress ?? (() => {});
 
   const outDir = resolve(projectDir, "preview");
-  const server = await serveHarness(projectDir, only, progress);
-  const { base, origin, distDir, widgets: widgetNames } = server;
+  const server = await serveHarness(projectDir, only, opts.dashUrl, progress, progress);
+  const { origin, distDir, widgets: widgetNames } = server;
 
   const skipped: string[] = [];
   let shot = 0;
@@ -80,13 +81,16 @@ export async function capturePreviews(opts: PreviewOptions): Promise<PreviewSumm
     await withFreshBrowser(async (page) => {
       watchEgress(page, origin);
       for (const widget of widgetNames) {
-        await page.goto(`${base}?widget=${widget}&ex=0&theme=light`, {
+        await page.goto(stageUrl(server, { widget, ex: -1, theme: "light" }), {
           waitUntil: "domcontentloaded",
         });
-        await page.waitForSelector("html[data-harness-examples]", {
-          state: "attached",
-          timeout: 30_000,
-        });
+        try {
+          await awaitStage(page, 30_000);
+        } catch (err) {
+          if (!(err instanceof WidgetCrash)) throw err;
+          failures.push({ widget, kind: "crash", detail: err.message });
+          continue;
+        }
         const examples: ShotListEntry[] = JSON.parse(
           (await page.getAttribute("html", "data-harness-examples")) ?? "[]",
         );
@@ -123,20 +127,14 @@ export async function capturePreviews(opts: PreviewOptions): Promise<PreviewSumm
         for (let i = 0; i < examples.length; i++) {
           const label = slug(examples[i].label ?? `example-${i}`);
           for (const theme of THEMES) {
-            const url = `${base}?widget=${widget}&ex=${i}&theme=${theme}`;
+            const url = stageUrl(server, { widget, ex: i, theme });
             const file = resolve(outDir, `${widget}-${label}-${theme}.png`);
 
             const shoot = async (page: import("playwright").Page) => {
               const lock = watchEgress(page, origin);
-              await freezeClock(page);
+              await pinDate(page);
               await page.goto(url, { waitUntil: "domcontentloaded" });
-              await page.waitForSelector("html[data-harness-ready='1']", {
-                state: "attached",
-                timeout: 20_000,
-              });
-              // Fire rAF-gated mount animations before capturing.
-              await settleAnimations(page);
-              await assertNoCrash(page);
+              await awaitStage(page);
               await page.locator("#stage").screenshot({ path: file, omitBackground: true });
               for (const a of lock.attempts) widgetAttempts.add(a);
             };
