@@ -44,7 +44,7 @@
     "@clack/prompts": "^1.6.0",
     "@glasshome/sync-layer": "0.12.8",
     "@glasshome/widget-contract": "0.7.0",
-    "@glasshome/widget-sdk": "1.31.1",
+    "@glasshome/widget-sdk": "1.32.1",
     "@iconify-json/lucide": "^1.2.0",
     "@iconify-json/mdi": "^1.2.3",
     "@iconify/utils": "^3.1.4",
