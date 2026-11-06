@@ -24,7 +24,7 @@ const ZOD_IMPORT_MESSAGE =
   'importing from "zod" directly couples your widget to the SDK\'s zod version. Prefer field.*/defineConfig; for advanced schemas import { z } from "@glasshome/widget-sdk".';
 const RAW_STORAGE = /\b(?:localStorage|sessionStorage)\b/;
 const RAW_STORAGE_MESSAGE =
-  "localStorage and sessionStorage are in memory and empty after every reload; keep what must last with useWidgetState.";
+  "localStorage and sessionStorage are in memory and empty after every reload; keep what must last with useWidgetState (widget-sdk 1.28.0 and later).";
 
 function widgetSourceFiles(cwd: string, widget: string): string[] {
   const dir = resolve(cwd, "src", widget);
