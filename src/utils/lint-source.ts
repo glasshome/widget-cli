@@ -6,7 +6,7 @@ import { discoverWidgets } from "./manifest";
 
 /**
  * Source-level deprecation lint. Scans widget `.ts`/`.tsx`/`.css` for deprecated API usage
- * (driven by the SDK deprecation registry) and direct `zod` imports, printing the
+ * (driven by the SDK deprecation registry), direct `zod` imports and browser storage, printing the
  * removal timeline. Warnings only: never blocks a build until the deprecated path is
  * actually removed (v2). Runs on `bun widget build` and `connect`.
  */
@@ -22,6 +22,9 @@ const SOURCE_EXTS = [".ts", ".tsx", ".css"];
 const ZOD_IMPORT = /\bfrom\s+["']zod["']/;
 const ZOD_IMPORT_MESSAGE =
   'importing from "zod" directly couples your widget to the SDK\'s zod version. Prefer field.*/defineConfig; for advanced schemas import { z } from "@glasshome/widget-sdk".';
+const RAW_STORAGE = /\b(?:localStorage|sessionStorage)\b/;
+const RAW_STORAGE_MESSAGE =
+  "localStorage and sessionStorage are in memory and empty after every reload; keep what must last with useWidgetState (widget-sdk 1.28.0 and later).";
 
 function widgetSourceFiles(cwd: string, widget: string): string[] {
   const dir = resolve(cwd, "src", widget);
@@ -62,6 +65,14 @@ function lintWidgetSource(cwd: string, widget: string): SourceLintFinding[] {
           message: `[@glasshome/widget-sdk] ${ZOD_IMPORT_MESSAGE}`,
         });
       }
+      if (RAW_STORAGE.test(text)) {
+        findings.push({
+          widget,
+          file: rel,
+          line,
+          message: `[@glasshome/widget-sdk] ${RAW_STORAGE_MESSAGE}`,
+        });
+      }
     });
   }
   return findings;
@@ -76,7 +87,9 @@ export function lintAndReport(cwd: string, widgets?: string[]): SourceLintFindin
   const findings = targets.flatMap((w) => lintWidgetSource(cwd, w));
   if (findings.length === 0) return findings;
 
-  log.warn(`${findings.length} deprecated config usage(s) found (non-blocking until SDK 2.0):`);
+  log.warn(
+    `${findings.length} deprecated API or browser storage use(s) found (warnings, never block a build):`,
+  );
   for (const f of findings) {
     log.message(`  ${f.file}:${f.line}  ${f.message}`);
   }

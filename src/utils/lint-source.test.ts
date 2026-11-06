@@ -26,4 +26,14 @@ describe("lintAndReport", () => {
     expect(findings.map((f) => f.line)).toEqual([2]);
     expect(findings[0]?.message).toContain("internal-material-vars");
   });
+
+  test("storage use is reported with the door to use", () => {
+    root = mkdtempSync(join(tmpdir(), "lint-source-"));
+    mkdirSync(join(root, "src", "neon"), { recursive: true });
+    writeFileSync(join(root, "src", "neon", "index.tsx"), 'localStorage.setItem("k", "v");');
+    const findings = lintAndReport(root, ["neon"]);
+    expect(findings.map((f) => f.message)).toContain(
+      "[@glasshome/widget-sdk] localStorage and sessionStorage are in memory and empty after every reload; keep what must last with useWidgetState (widget-sdk 1.28.0 and later).",
+    );
+  });
 });
