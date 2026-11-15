@@ -5,6 +5,14 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.2](https://github.com/glasshome/widget-cli/compare/v0.21.1...v0.21.2) (2026-11-15)
+
+
+### Bug Fixes
+
+* **deps:** pin widget-sdk 1.32.3 ([5b37a6a](https://github.com/glasshome/widget-cli/commit/5b37a6a357e15921e3b05f7d44c123779038c262))
+* **deps:** pin widget-sdk 1.32.3 ([efe7401](https://github.com/glasshome/widget-cli/commit/efe74019ff41f5b6032b17ecda959ef6b38490b0))
+
 ## [0.21.1](https://github.com/glasshome/widget-cli/compare/v0.21.0...v0.21.1) (2026-11-15)
 
 
