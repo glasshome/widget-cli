@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { log } from "@clack/prompts";
 import { deprecations, formatDeprecation } from "@glasshome/widget-sdk/deprecations";
@@ -8,7 +8,7 @@ import { discoverWidgets } from "./manifest";
  * Source-level deprecation lint. Scans widget `.ts`/`.tsx`/`.css` for deprecated API usage
  * (driven by the SDK deprecation registry), direct `zod` imports and browser storage, printing the
  * removal timeline. Warnings only: never blocks a build until the deprecated path is
- * actually removed (v2). Runs on `bun widget build` and `connect`.
+ * actually removed (v2). Runs on `bun widget build`, `connect`, `preview` and `publish`.
  */
 
 export interface SourceLintFinding {
@@ -29,6 +29,7 @@ const RAW_STORAGE_MESSAGE =
 function widgetSourceFiles(cwd: string, widget: string): string[] {
   const dir = resolve(cwd, "src", widget);
   const out: string[] = [];
+  if (!existsSync(dir)) return out;
   const walk = (d: string) => {
     for (const entry of readdirSync(d)) {
       const p = join(d, entry);

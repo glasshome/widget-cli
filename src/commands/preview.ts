@@ -3,6 +3,7 @@ import color from "picocolors";
 import type { Box, Theme } from "../preview/sweep";
 import { type ScalarConfig, parseScalarConfig } from "../preview/scalar-config";
 import { DEFAULT_DASH } from "../preview/stage";
+import { lintAndReport } from "../utils/lint-source";
 import { withQuietStdout } from "../utils/quiet";
 
 /**
@@ -39,6 +40,7 @@ export async function runPreview(
   const { capturePreviews } = await import("../preview/capture");
 
   log.info(names.length ? `Previewing ${names.join(", ")}` : "Previewing all widgets");
+  lintAndReport(cwd, names.length ? names : undefined);
 
   let summary: Awaited<ReturnType<typeof capturePreviews>>;
   try {
@@ -184,6 +186,7 @@ export async function runSweepPreview(
   if (examples.some((n) => !Number.isInteger(n) || n < 0))
     fail("--example takes example numbers, starting at 0");
 
+  lintAndReport(cwd, names.length ? names : undefined);
   const summary = await withQuietStdout(() =>
     runSweep({
       projectDir: cwd,
