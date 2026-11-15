@@ -5,6 +5,7 @@ import { cancel, confirm, log, select, spinner } from "@clack/prompts";
 import semver from "semver";
 import { getHubUrl, getToken, renewHubToken, renewingCaller } from "../utils/auth";
 import { confirmPublish, fetchScopes, requestPublish, uploadToR2 } from "../utils/hub-api";
+import { lintAndReport } from "../utils/lint-source";
 import { cancelled } from "../utils/prompt";
 import {
   discoverWidgets,
@@ -204,6 +205,7 @@ export async function runPublish(
     process.exit(1);
   }
   s.stop("Build complete");
+  lintAndReport(cwd, [widgetName]);
 
   const floor = await settleSdkFloor(cwd, widgetName, hubUrl, {
     info: (line) => log.info(line),

@@ -36,4 +36,21 @@ describe("lintAndReport", () => {
       "[@glasshome/widget-sdk] localStorage and sessionStorage are in memory and empty after every reload; keep what must last with useWidgetState (widget-sdk 1.28.0 and later).",
     );
   });
+
+  test("the old icon import is reported with its replacement", () => {
+    root = mkdtempSync(join(tmpdir(), "lint-source-"));
+    mkdirSync(join(root, "src", "neon"), { recursive: true });
+    writeFileSync(
+      join(root, "src", "neon", "index.tsx"),
+      'import { Icon } from "@iconify-icon/solid";',
+    );
+    const findings = lintAndReport(root, ["neon"]);
+    expect(findings.map((f) => f.message).join("\n")).toContain("iconify-icon is deprecated");
+  });
+
+  test("a name that is not a widget is skipped", () => {
+    root = mkdtempSync(join(tmpdir(), "lint-source-"));
+    mkdirSync(join(root, "src", "neon"), { recursive: true });
+    expect(lintAndReport(root, ["missing"])).toEqual([]);
+  });
 });
