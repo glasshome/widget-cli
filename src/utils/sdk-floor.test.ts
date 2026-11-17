@@ -52,6 +52,8 @@ interface FixtureOptions {
   files: Record<string, string>;
   history?: Record<string, string[]> | null;
   sdkVersion?: string;
+  changelog?: string;
+  manifestFloor?: string;
 }
 
 const UNTOUCHED = "^1.0.0";
@@ -63,7 +65,7 @@ function project(opts: FixtureOptions): string {
   writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "fixture" }));
   writeFileSync(
     join(dir, "src", "demo", "manifest.json"),
-    `${JSON.stringify({ name: "Demo", sdkVersion: UNTOUCHED }, null, 2)}\n`,
+    `${JSON.stringify({ name: "Demo", sdkVersion: opts.manifestFloor ?? UNTOUCHED }, null, 2)}\n`,
   );
   for (const [path, code] of Object.entries(opts.files)) {
     mkdirSync(join(dir, "dist", path, ".."), { recursive: true });
@@ -84,6 +86,7 @@ function project(opts: FixtureOptions): string {
     }),
   );
   if (history) writeFileSync(join(sdk, "dist", "export-history.json"), JSON.stringify(history));
+  if (opts.changelog) writeFileSync(join(sdk, "CHANGELOG.md"), opts.changelog);
   return dir;
 }
 
@@ -104,6 +107,7 @@ function recorder(
     },
     interactive: overrides.interactive ?? true,
     allowPrereleaseDash: overrides.allowPrereleaseDash ?? false,
+    lowerFloor: overrides.lowerFloor ?? false,
     releasesSignal: overrides.releasesSignal,
   };
   return { lines, asked, deps };
@@ -203,6 +207,37 @@ describe("settleSdkFloor", () => {
     expect(out.lines).toContain("Floor kept at 1.9.0: the installed SDK predates export history");
   });
 
+  test("a history that skips a release in the SDK's changelog aborts before anything is written", async () => {
+    releases = [release("1.4.0", "stable", "1.9.0")];
+    const dir = project({
+      history: { "1.4.0": ["Widget"], "1.9.0": ["Widget", "useEntity"] },
+      changelog: "## [1.9.0](x)\n\n## [1.5.0](x)\n\n## [1.4.0](x)\n",
+      files: { "demo.js": 'import{useEntity as u}from"@glasshome/widget-sdk";export default u;' },
+    });
+    const result = await settleSdkFloor(dir, "demo", hubUrl, recorder().deps);
+    expect(result).toEqual({
+      ok: false,
+      message:
+        "The SDK's export history has no entry for 1.5.0, so no floor can be derived. Run scripts/backfill-export-history.ts in the SDK, then rebuild it.",
+    });
+    expect(writtenFloor(dir)).toBe(UNTOUCHED);
+  });
+
+  test("a history that covers the SDK's changelog floors at the release that added the name", async () => {
+    releases = [release("1.4.0", "stable", "1.9.0")];
+    const dir = project({
+      history: {
+        "1.4.0": ["Widget"],
+        "1.5.0": ["Widget", "useEntity"],
+        "1.9.0": ["Widget", "useEntity"],
+      },
+      changelog: "## [1.9.0](x)\n\n## [1.5.0](x)\n\n## [1.4.0](x)\n",
+      files: { "demo.js": 'import{useEntity as u}from"@glasshome/widget-sdk";export default u;' },
+    });
+    expect(await settleSdkFloor(dir, "demo", hubUrl, recorder().deps)).toEqual({ ok: true });
+    expect(writtenFloor(dir)).toBe("^1.5.0");
+  });
+
   test("a chunk the entry imports but the build did not write keeps the floor at the build SDK", async () => {
     releases = [release("1.4.0", "stable", "1.9.0")];
     const dir = project({ files: { "demo.js": ENTRY_WITH_LAZY_CHUNK } });
@@ -291,5 +326,44 @@ describe("settleSdkFloor", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toStartWith("Could not read Dash releases from");
     expect(writtenFloor(dir)).toBe(UNTOUCHED);
+  });
+});
+
+describe("settleSdkFloor against the manifest's floor", () => {
+  const needs15 = 'import{useEntity as u}from"@glasshome/widget-sdk";export default u;';
+  const stableDash = [release("1.4.0", "stable", "1.9.0")];
+
+  test("a derived floor below the manifest's stops publish naming both, and writes nothing", async () => {
+    releases = stableDash;
+    const dir = project({ manifestFloor: "^1.9.0", files: { "demo.js": needs15 } });
+    const result = await settleSdkFloor(dir, "demo", hubUrl, recorder().deps);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain("needs SDK ^1.5.0, below the manifest's ^1.9.0");
+      expect(result.message).toContain("--lower-floor");
+    }
+    expect(writtenFloor(dir)).toBe("^1.9.0");
+  });
+
+  test("--lower-floor writes the derived floor and prints both", async () => {
+    releases = stableDash;
+    const dir = project({ manifestFloor: "^1.9.0", files: { "demo.js": needs15 } });
+    const out = recorder({ lowerFloor: true });
+    expect(await settleSdkFloor(dir, "demo", hubUrl, out.deps)).toEqual({ ok: true });
+    expect(writtenFloor(dir)).toBe("^1.5.0");
+    expect(out.lines).toContain("Lowering the floor from ^1.9.0 to ^1.5.0 (--lower-floor)");
+  });
+
+  test("a derived floor at or above the manifest's is written without the flag", async () => {
+    releases = stableDash;
+    const above = project({ manifestFloor: "^1.4.0", files: { "demo.js": needs15 } });
+    const aboveOut = recorder();
+    expect(await settleSdkFloor(above, "demo", hubUrl, aboveOut.deps)).toEqual({ ok: true });
+    expect(writtenFloor(above)).toBe("^1.5.0");
+    expect(aboveOut.lines.some((line) => line.startsWith("Lowering"))).toBe(false);
+
+    const equal = project({ manifestFloor: "^1.5.0", files: { "demo.js": needs15 } });
+    expect(await settleSdkFloor(equal, "demo", hubUrl, recorder().deps)).toEqual({ ok: true });
+    expect(writtenFloor(equal)).toBe("^1.5.0");
   });
 });

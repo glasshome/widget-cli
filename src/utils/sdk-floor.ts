@@ -2,8 +2,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { type DashRelease, dashRequirement } from "@glasshome/widget-contract/dash-releases";
-import { deriveFloor } from "@glasshome/widget-contract/sdk-floor";
+import { deriveFloor, releasesInChangelog } from "@glasshome/widget-contract/sdk-floor";
 import { initSync, parse } from "es-module-lexer";
+import { lt, minVersion, validRange } from "semver";
 import { fetchDashReleases } from "./hub-api";
 import { readManifest, writeManifest } from "./manifest";
 import { isBunGlobalCache } from "./resolution";
@@ -46,12 +47,23 @@ function readBuiltChunks(cwd: string, widgetName: string): string | null {
   return parts.join("\n");
 }
 
-function readExportHistory(cwd: string): Record<string, string[]> | null {
+interface ExportRecord {
+  history: Record<string, string[]>;
+  /** The releases the history must cover; "trusted" for a published SDK, whose history is complete when it ships. */
+  releases: string[] | "trusted";
+}
+
+function readExportHistory(cwd: string): ExportRecord | null {
   try {
     const require = createRequire(join(cwd, "package.json"));
     const path = require.resolve("@glasshome/widget-sdk/export-history");
     if (isBunGlobalCache(path)) return null;
-    return JSON.parse(readFileSync(path, "utf-8"));
+    const history = JSON.parse(readFileSync(path, "utf-8"));
+    const changelog = join(dirname(path), "..", "CHANGELOG.md");
+    const releases = existsSync(changelog)
+      ? releasesInChangelog(readFileSync(changelog, "utf-8"))
+      : "trusted";
+    return { history, releases };
   } catch {
     return null;
   }
@@ -80,12 +92,23 @@ function floorOf(cwd: string, widgetName: string): Floor {
       message: "No @glasshome/widget-sdk installed here, so no floor can be set.",
     };
   }
-  const history = readExportHistory(cwd);
-  if (!history) return kept(buildSdk, "no-history");
+  const record = readExportHistory(cwd);
+  if (!record) return kept(buildSdk, "no-history");
   const code = readBuiltChunks(cwd, widgetName);
   if (code === null) return kept(buildSdk, "unreadable");
 
-  const result = deriveFloor({ code, history, buildSdk });
+  const result = deriveFloor({
+    code,
+    history: record.history,
+    buildSdk,
+    releases: record.releases,
+  });
+  if ("incomplete" in result) {
+    return {
+      ok: false,
+      message: `The SDK's export history has no entry for ${result.incomplete.join(", ")}, so no floor can be derived. Run scripts/backfill-export-history.ts in the SDK, then rebuild it.`,
+    };
+  }
   if ("refused" in result) {
     const verb = result.refused.length === 1 ? "is" : "are";
     return {
@@ -95,6 +118,11 @@ function floorOf(cwd: string, widgetName: string): Floor {
   }
   if (result.reason === "derived") return { ok: true, floor: result.floor, notice: null };
   return kept(result.floor, result.reason);
+}
+
+function isLowered(declared: string | undefined, derived: string): boolean {
+  const old = declared && validRange(declared) ? minVersion(declared) : null;
+  return old !== null && lt(derived, old);
 }
 
 /** Oldest stable Dash whose SDK satisfies `range`, as a Dash on no channel would be told to update to. */
@@ -108,6 +136,7 @@ export interface FloorDeps {
   confirm: (message: string) => Promise<boolean>;
   interactive: boolean;
   allowPrereleaseDash: boolean;
+  lowerFloor: boolean;
   releasesSignal?: () => AbortSignal;
 }
 
@@ -149,6 +178,17 @@ export async function settleSdkFloor(
   const range = `^${floor.floor}`;
   if (floor.notice) deps.info(floor.notice);
 
+  const manifest = readManifest(cwd, widgetName);
+  if (isLowered(manifest.sdkVersion, floor.floor)) {
+    if (!deps.lowerFloor) {
+      return {
+        ok: false,
+        message: `The built bundle needs SDK ${range}, below the manifest's ${manifest.sdkVersion}. A floor set for behaviour the imports cannot show would be dropped. Pass --lower-floor to publish at ${range}.`,
+      };
+    }
+    deps.info(`Lowering the floor from ${manifest.sdkVersion} to ${range} (--lower-floor)`);
+  }
+
   let releases: DashRelease[];
   try {
     releases = await fetchDashReleases(hubUrl, deps.releasesSignal?.());
@@ -160,7 +200,6 @@ export async function settleSdkFloor(
   const reach = await acceptReach(range, releases, deps);
   if (!reach.ok) return reach;
 
-  const manifest = readManifest(cwd, widgetName);
   manifest.sdkVersion = range;
   writeManifest(cwd, widgetName, manifest);
   return reach;

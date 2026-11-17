@@ -24,6 +24,7 @@ interface PublishOptions {
   bump?: "keep" | "patch" | "minor" | "major";
   scope?: string;
   allowPrereleaseDash?: boolean;
+  lowerFloor?: boolean;
 }
 
 async function authenticate(hubUrl: string): Promise<string> {
@@ -215,6 +216,7 @@ export async function runPublish(
     },
     interactive: process.stdin.isTTY === true,
     allowPrereleaseDash: options?.allowPrereleaseDash === true,
+    lowerFloor: options?.lowerFloor === true,
   });
   if (!floor.ok) {
     log.error(floor.message);

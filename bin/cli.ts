@@ -40,6 +40,7 @@ Commands:
   validate [name]        Validate all widgets or a specific one
   publish [hub-url]      Build and publish a widget to Hub
                          --allow-prerelease-dash publishes when only a beta or rc Dash runs it
+                         --lower-floor publishes at a derived sdkVersion floor below the manifest's
   login [hub-url]        Authenticate with GlassHome Hub
   info [name]            Show widget metadata and bundle info
   upgrade                Upgrade @glasshome/widget-sdk (latest, or --to <version>)
@@ -85,6 +86,7 @@ const { values: flags, positionals } = parseArgs({
     to: { type: "string" },
     "re-auth": { type: "boolean" },
     "allow-prerelease-dash": { type: "boolean" },
+    "lower-floor": { type: "boolean" },
     isolate: { type: "boolean" },
     dash: { type: "string" },
     sizes: { type: "string" },
@@ -219,6 +221,7 @@ switch (effectiveCommand) {
       bump: str(flags.bump) as "keep" | "patch" | "minor" | "major" | undefined,
       scope: str(flags.scope),
       allowPrereleaseDash: flags["allow-prerelease-dash"] === true,
+      lowerFloor: flags["lower-floor"] === true,
     });
     outro("Done");
     break;
