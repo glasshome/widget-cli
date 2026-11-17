@@ -52,6 +52,7 @@ interface FixtureOptions {
   files: Record<string, string>;
   history?: Record<string, string[]> | null;
   sdkVersion?: string;
+  changelog?: string;
 }
 
 const UNTOUCHED = "^1.0.0";
@@ -84,6 +85,7 @@ function project(opts: FixtureOptions): string {
     }),
   );
   if (history) writeFileSync(join(sdk, "dist", "export-history.json"), JSON.stringify(history));
+  if (opts.changelog) writeFileSync(join(sdk, "CHANGELOG.md"), opts.changelog);
   return dir;
 }
 
@@ -201,6 +203,37 @@ describe("settleSdkFloor", () => {
     expect(await settleSdkFloor(dir, "demo", hubUrl, out.deps)).toEqual({ ok: true });
     expect(writtenFloor(dir)).toBe("^1.9.0");
     expect(out.lines).toContain("Floor kept at 1.9.0: the installed SDK predates export history");
+  });
+
+  test("a history that skips a release in the SDK's changelog aborts before anything is written", async () => {
+    releases = [release("1.4.0", "stable", "1.9.0")];
+    const dir = project({
+      history: { "1.4.0": ["Widget"], "1.9.0": ["Widget", "useEntity"] },
+      changelog: "## [1.9.0](x)\n\n## [1.5.0](x)\n\n## [1.4.0](x)\n",
+      files: { "demo.js": 'import{useEntity as u}from"@glasshome/widget-sdk";export default u;' },
+    });
+    const result = await settleSdkFloor(dir, "demo", hubUrl, recorder().deps);
+    expect(result).toEqual({
+      ok: false,
+      message:
+        "The SDK's export history has no entry for 1.5.0, so no floor can be derived. Rebuild the SDK.",
+    });
+    expect(writtenFloor(dir)).toBe(UNTOUCHED);
+  });
+
+  test("a history that covers the SDK's changelog floors at the release that added the name", async () => {
+    releases = [release("1.4.0", "stable", "1.9.0")];
+    const dir = project({
+      history: {
+        "1.4.0": ["Widget"],
+        "1.5.0": ["Widget", "useEntity"],
+        "1.9.0": ["Widget", "useEntity"],
+      },
+      changelog: "## [1.9.0](x)\n\n## [1.5.0](x)\n\n## [1.4.0](x)\n",
+      files: { "demo.js": 'import{useEntity as u}from"@glasshome/widget-sdk";export default u;' },
+    });
+    expect(await settleSdkFloor(dir, "demo", hubUrl, recorder().deps)).toEqual({ ok: true });
+    expect(writtenFloor(dir)).toBe("^1.5.0");
   });
 
   test("a chunk the entry imports but the build did not write keeps the floor at the build SDK", async () => {

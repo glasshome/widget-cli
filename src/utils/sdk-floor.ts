@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { type DashRelease, dashRequirement } from "@glasshome/widget-contract/dash-releases";
-import { deriveFloor } from "@glasshome/widget-contract/sdk-floor";
+import { deriveFloor, releasesInChangelog } from "@glasshome/widget-contract/sdk-floor";
 import { initSync, parse } from "es-module-lexer";
 import { fetchDashReleases } from "./hub-api";
 import { readManifest, writeManifest } from "./manifest";
@@ -46,12 +46,23 @@ function readBuiltChunks(cwd: string, widgetName: string): string | null {
   return parts.join("\n");
 }
 
-function readExportHistory(cwd: string): Record<string, string[]> | null {
+interface ExportRecord {
+  history: Record<string, string[]>;
+  /** The releases the history must cover; null for a published SDK, whose history is complete when it ships. */
+  releases: string[] | null;
+}
+
+function readExportHistory(cwd: string): ExportRecord | null {
   try {
     const require = createRequire(join(cwd, "package.json"));
     const path = require.resolve("@glasshome/widget-sdk/export-history");
     if (isBunGlobalCache(path)) return null;
-    return JSON.parse(readFileSync(path, "utf-8"));
+    const history = JSON.parse(readFileSync(path, "utf-8"));
+    const changelog = join(dirname(path), "..", "CHANGELOG.md");
+    const releases = existsSync(changelog)
+      ? releasesInChangelog(readFileSync(changelog, "utf-8"))
+      : null;
+    return { history, releases };
   } catch {
     return null;
   }
@@ -80,12 +91,23 @@ function floorOf(cwd: string, widgetName: string): Floor {
       message: "No @glasshome/widget-sdk installed here, so no floor can be set.",
     };
   }
-  const history = readExportHistory(cwd);
-  if (!history) return kept(buildSdk, "no-history");
+  const record = readExportHistory(cwd);
+  if (!record) return kept(buildSdk, "no-history");
   const code = readBuiltChunks(cwd, widgetName);
   if (code === null) return kept(buildSdk, "unreadable");
 
-  const result = deriveFloor({ code, history, buildSdk });
+  const result = deriveFloor({
+    code,
+    history: record.history,
+    buildSdk,
+    releases: record.releases ?? undefined,
+  });
+  if ("incomplete" in result) {
+    return {
+      ok: false,
+      message: `The SDK's export history has no entry for ${result.incomplete.join(", ")}, so no floor can be derived. Rebuild the SDK.`,
+    };
+  }
   if ("refused" in result) {
     const verb = result.refused.length === 1 ? "is" : "are";
     return {
