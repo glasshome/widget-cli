@@ -196,18 +196,21 @@ export async function runPublish(
   s.stop(typesOk ? "Types checked" : "Typecheck failed");
   if (!typesOk) process.exit(1);
 
-  s.start("Building widget...");
-  const buildProc = Bun.spawn(["bun", "run", "build"], { cwd, stdout: "pipe", stderr: "pipe" });
-  const buildExit = await buildProc.exited;
-  if (buildExit !== 0) {
-    const stderr = await new Response(buildProc.stderr).text();
-    s.stop("Build failed");
-    log.error(stderr);
-    process.exit(1);
-  }
-  s.stop("Build complete");
+  const build = async (label: string) => {
+    s.start(label);
+    const buildProc = Bun.spawn(["bun", "run", "build"], { cwd, stdout: "pipe", stderr: "pipe" });
+    if ((await buildProc.exited) !== 0) {
+      const stderr = await new Response(buildProc.stderr).text();
+      s.stop("Build failed");
+      log.error(stderr);
+      process.exit(1);
+    }
+    s.stop("Build complete");
+  };
+  await build("Building widget...");
   lintAndReport(cwd, [widgetName]);
 
+  const builtFloor = readManifest(cwd, widgetName).sdkVersion;
   const floor = await settleSdkFloor(cwd, widgetName, hubUrl, {
     info: (line) => log.info(line),
     confirm: async (message) => {
@@ -221,6 +224,10 @@ export async function runPublish(
   if (!floor.ok) {
     log.error(floor.message);
     process.exit(1);
+  }
+  // The SDK picks the widget's CSS from the manifest floor, so a moved floor needs the sheet built again.
+  if (readManifest(cwd, widgetName).sdkVersion !== builtFloor) {
+    await build("Rebuilding for the new floor...");
   }
 
   // Validate AFTER the build, not before: the build is what produces the
