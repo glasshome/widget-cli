@@ -5,6 +5,24 @@ All notable changes to `@glasshome/widget-cli` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0](https://github.com/glasshome/widget-cli/compare/v0.21.3...v0.22.0) (2026-11-19)
+
+
+### Features
+
+* **publish:** refuse to lower an sdkVersion floor unless --lower-floor is passed ([eca6e17](https://github.com/glasshome/widget-cli/commit/eca6e17fba3dfc7061deea33582064e2ba9b6dd7))
+
+
+### Bug Fixes
+
+* **deps:** widget-contract 0.8.0, whose deriveFloor requires the releases it covers ([cf9176a](https://github.com/glasshome/widget-cli/commit/cf9176abfedd7552f768433d46d8517d3a4729a7))
+* **deps:** widget-sdk 1.33.0 ([d33c2a6](https://github.com/glasshome/widget-cli/commit/d33c2a68a8647234983ee900399e8a92f23fb8a0))
+* **deps:** widget-sdk 1.33.0 ([d05637d](https://github.com/glasshome/widget-cli/commit/d05637d553a36349174656da5b0c136296aa89cb))
+* **publish:** a floor is derived only from a complete SDK history, and never lowered silently ([67dba2c](https://github.com/glasshome/widget-cli/commit/67dba2cf01855ae83bec99619848f7d8c5bdb663))
+* **publish:** rebuild when publish moves the sdkVersion floor ([ee7f00a](https://github.com/glasshome/widget-cli/commit/ee7f00a4277b30534bac9110d2c5f60c599bddce))
+* **publish:** rebuild when publish moves the sdkVersion floor ([f66c080](https://github.com/glasshome/widget-cli/commit/f66c080044627317ce4ca8d7e317b55e714adb4e))
+* **publish:** refuse to derive a floor from an SDK history that skips a release ([7711ffe](https://github.com/glasshome/widget-cli/commit/7711ffed2c384d5aa96b750bfe3de1c7f8ba39a4))
+
 ## [0.21.3](https://github.com/glasshome/widget-cli/compare/v0.21.2...v0.21.3) (2026-11-16)
 
 
