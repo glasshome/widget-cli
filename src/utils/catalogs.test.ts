@@ -69,4 +69,13 @@ describe("emitCatalogs", () => {
     expect(en["manifest.config.area.title"]).toBe("Area");
     expect(en["manifest.config.title.description"]).toBe("Optional display name override");
   });
+
+  test("an author file that does not parse fails the build, naming the file", () => {
+    const cwd = fixture();
+    writeFileSync(join(cwd, "src", "climate", "locales", "en.json"), "{oops");
+    expect(() => emitCatalogs(cwd)).toThrow("src/climate/locales/en.json does not parse");
+    writeFileSync(join(cwd, "src", "climate", "locales", "en.json"), "{}");
+    writeFileSync(join(cwd, "src", "climate", "locales", "fr.json"), "[]");
+    expect(() => emitCatalogs(cwd)).toThrow("src/climate/locales/fr.json does not parse");
+  });
 });

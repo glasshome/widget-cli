@@ -79,9 +79,15 @@ describe("locale-less formatting", () => {
     expect(lint('new Intl.NumberFormat("fr");')).toEqual([]);
   });
 
+  test("locale-less case conversion warns", () => {
+    expect(lint("x.toLocaleUpperCase();")).toHaveLength(1);
+    expect(lint('x.toLocaleLowerCase("tr");')).toEqual([]);
+  });
+
   test("localeCompare with one argument warns", () => {
     expect(lint("a.localeCompare(b);")).toHaveLength(1);
     expect(lint('a.localeCompare(b, "de");')).toEqual([]);
+    expect(lint("a.localeCompare(b, undefined, { numeric: true });")).toHaveLength(1);
   });
 
   test("parsing a formatted number warns", () => {

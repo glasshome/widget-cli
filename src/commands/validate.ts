@@ -20,7 +20,8 @@ import {
   readRegistry,
   type WidgetManifest,
 } from "../utils/manifest";
-import { localeFiles, readAuthorEnglish, SIDECAR_LOCALES } from "../utils/catalogs";
+import { localeFiles, readAuthorEnglish } from "../utils/catalogs";
+import { findTCalls } from "../utils/t-calls";
 import { widgetSourceFiles } from "../utils/lint-source";
 import { getInstalledSdkVersion } from "../utils/sdk-version";
 
@@ -145,9 +146,6 @@ function validateManifest(manifest: WidgetManifest, installedSdk: string | null)
   };
 }
 
-const LITERAL_T = /(?<![.\w$])t\(\s*(["'`])((?:(?!\1)[^\\\n])*)\1\s*[,)]/g;
-const DYNAMIC_T = /(?<![.\w$])t\(\s*(?!["'`)\s])/g;
-
 export function validateCatalogs(
   cwd: string,
   slug: string,
@@ -156,7 +154,12 @@ export function validateCatalogs(
   const errors: string[] = [];
   const warnings: string[] = [];
   const localesDir = resolve(cwd, "src", slug, "locales");
-  const english = readAuthorEnglish(cwd, slug);
+  let english: Record<string, string> = {};
+  try {
+    english = readAuthorEnglish(cwd, slug);
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : String(err));
+  }
 
   for (const refusal of reservedRefusals(manifest as never, english)) {
     errors.push(`Reserved key "${refusal.key}": ${refusal.reason}`);
@@ -169,7 +172,7 @@ export function validateCatalogs(
 
   for (const file of localeFiles(localesDir)) {
     const rel = `locales/${file.tag}.json`;
-    if (!isSidecarLocale(file.tag, SIDECAR_LOCALES)) {
+    if (!isSidecarLocale(file.tag)) {
       errors.push(`${rel}: "${file.tag}" is not a language GlassHome ships`);
       continue;
     }
@@ -189,22 +192,15 @@ export function validateCatalogs(
   for (const file of widgetSourceFiles(cwd, slug)) {
     if (!/\.tsx?$/.test(file)) continue;
     const rel = relative(cwd, file);
-    readFileSync(file, "utf8")
-      .split("\n")
-      .forEach((text, i) => {
-        for (const match of text.matchAll(LITERAL_T)) {
-          const key = match[2] ?? "";
-          if (!Object.hasOwn(english, key)) {
-            errors.push(`${rel}:${i + 1} t("${key}") is not in locales/en.json`);
-          }
-        }
-        if (DYNAMIC_T.test(text)) {
-          warnings.push(
-            `${rel}:${i + 1} t() takes a key that is not a literal, so it is not checked`,
-          );
-        }
-        DYNAMIC_T.lastIndex = 0;
-      });
+    for (const call of findTCalls(rel, readFileSync(file, "utf8"))) {
+      if (call.key === null) {
+        warnings.push(
+          `${rel}:${call.line} t() takes a key that is not a literal, so it is not checked`,
+        );
+      } else if (!Object.hasOwn(english, call.key)) {
+        errors.push(`${rel}:${call.line} t("${call.key}") is not in locales/en.json`);
+      }
+    }
   }
   return { errors, warnings };
 }

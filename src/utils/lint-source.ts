@@ -28,9 +28,9 @@ const RAW_STORAGE_MESSAGE =
 
 const LOCALE_RULES: { pattern: RegExp; message: string }[] = [
   {
-    pattern: /\.toLocale(?:Date|Time)?String\(\s*(?:undefined\s*)?[,)]/,
+    pattern: /\.toLocale(?:(?:Date|Time)?String|(?:Upper|Lower)Case)\(\s*(?:undefined\s*)?[,)]/,
     message:
-      "toLocaleString() with no locale formats in the browser's language; use formatNumber, formatDate or formatTemperature from the SDK, or pass a locale.",
+      "toLocaleString() and toLocaleUpperCase() with no locale use the browser's language; use formatNumber, formatDate or formatTemperature from the SDK, or pass a locale.",
   },
   {
     pattern: /\bIntl\.\w+\(\s*(?:undefined\s*)?[,)](?!\.resolvedOptions)/,
@@ -38,7 +38,7 @@ const LOCALE_RULES: { pattern: RegExp; message: string }[] = [
       "an Intl formatter with no locale uses the browser's language; use formatNumber or formatDate from the SDK, or pass a locale.",
   },
   {
-    pattern: /\.localeCompare\([^,]*\)/,
+    pattern: /\.localeCompare\((?:[^,]*\)|[^,]*,\s*undefined\b)/,
     message:
       "localeCompare() with no locale sorts in the browser's language; pass the member's locale from useTranslation().",
   },

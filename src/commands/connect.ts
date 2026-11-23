@@ -14,7 +14,7 @@ import {
   pollDeviceToken,
   storeHostToken,
 } from "../utils/auth";
-import { builtLocaleFiles } from "../utils/catalogs";
+import { builtLocaleFiles, emitCatalogs } from "../utils/catalogs";
 import { lintAndReport } from "../utils/lint-source";
 import { withQuietStdout } from "../utils/quiet";
 
@@ -34,7 +34,7 @@ interface RegistryJson {
 /**
  * Upload a single widget bundle to the API and register it.
  */
-export async function uploadAndRegister(
+async function uploadAndRegister(
   apiUrl: string,
   distDir: string,
   widget: RegistryWidget,
@@ -109,22 +109,33 @@ export async function uploadAndRegister(
       body: readFileSync(file.path, "utf-8"),
     });
     if (!res.ok) {
-      throw new Error(`Failed to upload ${file.tag} catalog for ${slug}: HTTP ${res.status}`);
+      throw new Error(
+        `Failed to upload ${file.tag} catalog for ${slug}: HTTP ${res.status} ${await res.text()}`,
+      );
     }
   }
 }
 
 /**
- * Read registry.json and upload all widget bundles.
+ * Emit the catalogs from source, then upload the named widgets (all when omitted).
  * @returns Array of widget slugs that were registered
  */
-async function uploadAllWidgets(apiUrl: string, distDir: string, token: string): Promise<string[]> {
-  const registryPath = resolve(distDir, "registry.json");
-  const registry: RegistryJson = JSON.parse(readFileSync(registryPath, "utf-8"));
+export async function emitAndUpload(
+  cwd: string,
+  apiUrl: string,
+  token: string,
+  only?: string[],
+): Promise<string[]> {
+  emitCatalogs(cwd);
+  const distDir = resolve(cwd, "dist");
+  const registry: RegistryJson = JSON.parse(
+    readFileSync(resolve(distDir, "registry.json"), "utf-8"),
+  );
   const slugs: string[] = [];
 
   for (const widget of registry.widgets) {
     const slug = widget.bundleUrl.replace(/^\.\//, "").replace(/\.js$/, "");
+    if (only && !only.includes(slug)) continue;
     await uploadAndRegister(apiUrl, distDir, widget, token);
     slugs.push(slug);
   }
@@ -263,11 +274,10 @@ interface ReuploadWatch {
 function watchAndReupload(opts: {
   cwd: string;
   apiUrl: string;
-  distDir: string;
   buildOpts: BuildOpts;
   token: string;
 }): ReuploadWatch {
-  const { cwd, apiUrl, distDir, buildOpts, token } = opts;
+  const { cwd, apiUrl, buildOpts, token } = opts;
   const DEBOUNCE_MS = 150;
   const pending = new Set<string>();
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -296,17 +306,10 @@ function watchAndReupload(opts: {
         process.chdir(origCwd);
       }
 
-      const registry: RegistryJson = JSON.parse(
-        readFileSync(resolve(distDir, "registry.json"), "utf-8"),
-      );
+      const pushed = await emitAndUpload(cwd, apiUrl, token, widgets);
       for (const widgetName of widgets) {
-        const widget = registry.widgets.find((w) => w.bundleUrl === `./${widgetName}.js`);
-        if (widget) {
-          await uploadAndRegister(apiUrl, distDir, widget, token);
-          log.info(`Rebuilt & uploaded ${widgetName}`);
-        } else {
-          log.warn(`No registry entry for ${widgetName}, skipping upload`);
-        }
+        if (pushed.includes(widgetName)) log.info(`Rebuilt & uploaded ${widgetName}`);
+        else log.warn(`No registry entry for ${widgetName}, skipping upload`);
       }
     } catch (err) {
       log.warn(`Rebuild failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -423,11 +426,18 @@ export async function runConnect(
   }
 
   s.start("Registering widgets with dashboard...");
-  const registeredTags = await uploadAllWidgets(apiUrl, distDir, token);
+  let registeredTags: string[];
+  try {
+    registeredTags = await emitAndUpload(cwd, apiUrl, token);
+  } catch (err) {
+    s.stop("Upload failed");
+    log.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
   s.stop("Widgets registered");
   await warnIfDevModeOff(api, token);
 
-  const reupload = watchAndReupload({ cwd, apiUrl, distDir, buildOpts, token });
+  const reupload = watchAndReupload({ cwd, apiUrl, buildOpts, token });
   announceConnected(cwd);
   disconnectOnSignal({ api, token, registeredTags, reupload });
 

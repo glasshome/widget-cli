@@ -7,12 +7,11 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { isSidecarLocale, type WidgetManifest } from "@glasshome/widget-contract";
 import { reservedKeys } from "@glasshome/widget-contract/catalog-reserved";
+import { parseCatalog } from "@glasshome/widget-contract/i18n";
 import { readRegistry } from "./manifest";
-
-export const SIDECAR_LOCALES = ["en", "fr", "es", "de"] as const;
 
 export interface LocaleFile {
   tag: string;
@@ -27,21 +26,20 @@ export function localeFiles(dir: string): LocaleFile[] {
 }
 
 export function builtLocaleFiles(distDir: string, slug: string): LocaleFile[] {
-  return localeFiles(join(distDir, slug, "locales")).filter((file) =>
-    isSidecarLocale(file.tag, SIDECAR_LOCALES),
-  );
+  return localeFiles(join(distDir, slug, "locales")).filter((file) => isSidecarLocale(file.tag));
 }
 
 export function readAuthorEnglish(cwd: string, slug: string): Record<string, string> {
   const path = resolve(cwd, "src", slug, "locales", "en.json");
   if (!existsSync(path)) return {};
-  try {
-    const data: unknown = JSON.parse(readFileSync(path, "utf8"));
-    return typeof data === "object" && data !== null && !Array.isArray(data)
-      ? (data as Record<string, string>)
-      : {};
-  } catch {
-    return {};
+  assertCatalog(cwd, path);
+  return JSON.parse(readFileSync(path, "utf8")) as Record<string, string>;
+}
+
+function assertCatalog(cwd: string, path: string): void {
+  const parsed = parseCatalog(readFileSync(path, "utf8"));
+  if (!parsed.ok) {
+    throw new Error(`${relative(cwd, path)} does not parse: ${JSON.stringify(parsed.error)}`);
   }
 }
 
@@ -56,7 +54,8 @@ export function emitCatalogs(cwd: string): void {
     const english = { ...readAuthorEnglish(cwd, slug), ...reservedKeys(widget as WidgetManifest) };
     writeFileSync(join(out, "en.json"), `${JSON.stringify(english, null, 2)}\n`);
     for (const file of localeFiles(resolve(cwd, "src", slug, "locales"))) {
-      if (file.tag !== "en" && isSidecarLocale(file.tag, SIDECAR_LOCALES)) {
+      if (file.tag !== "en" && isSidecarLocale(file.tag)) {
+        assertCatalog(cwd, file.path);
         copyFileSync(file.path, join(out, `${file.tag}.json`));
       }
     }
