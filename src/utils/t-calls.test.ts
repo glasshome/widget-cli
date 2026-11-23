@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { findTCalls } from "./t-calls";
 
-const find = (body: string) => findTCalls("w.tsx", body);
+const IMPORT = 'import { useTranslation } from "@glasshome/widget-sdk"; ';
+const find = (body: string) => findTCalls("w.tsx", IMPORT + body);
 
 describe("findTCalls", () => {
   test("a literal key from a useTranslation destructure", () => {
@@ -42,5 +43,38 @@ describe("findTCalls", () => {
 
   test("an unrelated local t is ignored", () => {
     expect(find("const t = (n: number) => n;\nt(0.5);\nx.t(1);")).toEqual([]);
+  });
+
+  test("a renamed SDK hook import and a namespace import are checked", () => {
+    expect(
+      findTCalls(
+        "w.tsx",
+        'import { useTranslation as useT } from "@glasshome/widget-sdk";\nconst { t } = useT();\nt("a");',
+      ),
+    ).toEqual([{ line: 3, key: "a" }]);
+    expect(
+      findTCalls(
+        "w.tsx",
+        'import * as sdk from "@glasshome/widget-sdk";\nconst { t } = sdk.useTranslation();\nt("a");\nsdk.useTranslation().t("b");',
+      ),
+    ).toEqual([
+      { line: 3, key: "a" },
+      { line: 4, key: "b" },
+    ]);
+  });
+
+  test("a widget's own useTranslation hook is never checked", () => {
+    expect(
+      findTCalls(
+        "w.tsx",
+        'import { useTranslation } from "./i18n";\nconst { t } = useTranslation();\nt("a");\nuseTranslation().t("b");',
+      ),
+    ).toEqual([]);
+    expect(
+      findTCalls(
+        "w.tsx",
+        'function useTranslation() { return { t: (k: string) => k }; }\nconst { t } = useTranslation();\nt("a");',
+      ),
+    ).toEqual([]);
   });
 });

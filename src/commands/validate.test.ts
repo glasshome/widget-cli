@@ -6,6 +6,7 @@ import type { WidgetManifest } from "../utils/manifest";
 import { validateCatalogs } from "./validate";
 
 let root: string | undefined;
+const SDK_HOOK = 'import { useTranslation } from "@glasshome/widget-sdk"; ';
 
 afterEach(() => {
   if (root) rmSync(root, { recursive: true, force: true });
@@ -33,7 +34,10 @@ function widget(files: Record<string, string>, source = ""): string {
 
 describe("validateCatalogs", () => {
   test("a clean widget passes", () => {
-    const cwd = widget({ "en.json": '{"hi":"Hello"}' }, 'const { t } = useTranslation();\nt("hi")');
+    const cwd = widget(
+      { "en.json": '{"hi":"Hello"}' },
+      SDK_HOOK + 'const { t } = useTranslation();\nt("hi")',
+    );
     expect(validateCatalogs(cwd, "climate", manifest)).toEqual({ errors: [], warnings: [] });
   });
 
@@ -61,14 +65,15 @@ describe("validateCatalogs", () => {
   test("a literal t() key missing from en.json fails with key, file and line", () => {
     const cwd = widget(
       { "en.json": '{"hi":"Hello"}' },
-      'const { t } = useTranslation();\nt("missing");',
+      SDK_HOOK + 'const { t } = useTranslation();\nt("missing");',
     );
     const { errors } = validateCatalogs(cwd, "climate", manifest);
     expect(errors).toEqual(['src/climate/index.tsx:2 t("missing") is not in locales/en.json']);
   });
 
   test("non-literal t() keys are warnings, never errors", () => {
-    const source = 'const { t } = useTranslation();\nt(someVar);\nt(`a.${x}`);\nt("a" + b);';
+    const source =
+      SDK_HOOK + 'const { t } = useTranslation();\nt(someVar);\nt(`a.${x}`);\nt("a" + b);';
     const cwd = widget({ "en.json": '{"hi":"Hello"}' }, source);
     const result = validateCatalogs(cwd, "climate", manifest);
     expect(result.errors).toEqual([]);
@@ -81,7 +86,7 @@ describe("validateCatalogs", () => {
 
   test("a renamed destructure and the SDK import are checked", () => {
     const source =
-      'import { t } from "@glasshome/widget-sdk";\nconst { t: tr } = useTranslation();\ntr("one");\nt("two");';
+      'import { t, useTranslation } from "@glasshome/widget-sdk";\nconst { t: tr } = useTranslation();\ntr("one");\nt("two");';
     const cwd = widget({ "en.json": "{}" }, source);
     expect(validateCatalogs(cwd, "climate", manifest).errors).toEqual([
       'src/climate/index.tsx:3 t("one") is not in locales/en.json',
