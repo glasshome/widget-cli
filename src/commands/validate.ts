@@ -11,6 +11,7 @@ import {
 } from "@glasshome/widget-contract";
 import { parseCatalog } from "@glasshome/widget-contract/i18n";
 import {
+  reservedKeysLeftOut,
   reservedLocaleRefusals,
   reservedRefusals,
 } from "@glasshome/widget-contract/catalog-reserved";
@@ -164,8 +165,13 @@ export function validateCatalogs(
     errors.push(err instanceof Error ? err.message : String(err));
   }
 
-  for (const refusal of reservedRefusals(manifest as never, english)) {
+  for (const refusal of reservedRefusals(manifest, english)) {
     errors.push(`Reserved key "${refusal.key}": ${refusal.reason}`);
+  }
+  for (const key of reservedKeysLeftOut(manifest)) {
+    warnings.push(
+      `Reserved key "${key}" stays English in every language: translations carry plain text only, without {, <, tabs or past the length limit`,
+    );
   }
   const names = [manifest.name, (manifest as { displayName?: string }).displayName];
   for (const value of names) {
@@ -185,10 +191,7 @@ export function validateCatalogs(
       continue;
     }
     if (file.tag === "en") continue;
-    for (const refusal of reservedLocaleRefusals(
-      manifest as never,
-      Object.fromEntries(parsed.value),
-    )) {
+    for (const refusal of reservedLocaleRefusals(manifest, Object.fromEntries(parsed.value))) {
       errors.push(`${rel}: reserved key "${refusal.key}": ${refusal.reason}`);
     }
     for (const key of parsed.value.keys()) {

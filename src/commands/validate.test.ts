@@ -43,7 +43,7 @@ describe("validateCatalogs", () => {
     expect(errors.join("\n")).toContain("author-defined");
   });
 
-  test("a locale's reserved name over the limit, ICU or an unknown key fails", () => {
+  test("a locale's reserved name over the limit, text past the grammar or an unknown key fails", () => {
     const long = "n".repeat(101);
     const cwd = widget({
       "en.json": '{"hi":"Hello"}',
@@ -54,7 +54,7 @@ describe("validateCatalogs", () => {
     const errors = validateCatalogs(cwd, "climate", manifest).errors.join("\n");
     expect(errors).toContain("fr.json");
     expect(errors).toContain("too-long");
-    expect(errors).toContain("icu");
+    expect(errors).toContain("grammar");
     expect(errors).toContain("unknown-key");
   });
 
@@ -123,9 +123,12 @@ describe("validateCatalogs", () => {
     expect(errors.join("\n")).toContain("blank");
   });
 
-  test("an ICU brace in a reserved value fails", () => {
+  test("a reserved value the catalog grammar cannot carry warns and stays English", () => {
     const cwd = widget({});
-    const { errors } = validateCatalogs(cwd, "climate", { ...manifest, description: "Use {x}" });
-    expect(errors.join("\n")).toContain("icu");
+    const result = validateCatalogs(cwd, "climate", { ...manifest, description: "Use {x}" });
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([
+      'Reserved key "manifest.description" stays English in every language: translations carry plain text only, without {, <, tabs or past the length limit',
+    ]);
   });
 });

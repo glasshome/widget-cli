@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { isSidecarLocale, type WidgetManifest } from "@glasshome/widget-contract";
+import { isSidecarLocale } from "@glasshome/widget-contract";
 import { reservedKeys } from "@glasshome/widget-contract/catalog-reserved";
 import { parseCatalog } from "@glasshome/widget-contract/i18n";
 import { readRegistry } from "./manifest";
@@ -51,7 +51,7 @@ export function emitCatalogs(cwd: string): void {
     const out = resolve(cwd, "dist", slug, "locales");
     rmSync(out, { recursive: true, force: true });
     mkdirSync(out, { recursive: true });
-    const english = { ...readAuthorEnglish(cwd, slug), ...reservedKeys(widget as WidgetManifest) };
+    const english = { ...readAuthorEnglish(cwd, slug), ...reservedKeys(widget) };
     writeFileSync(join(out, "en.json"), `${JSON.stringify(english, null, 2)}\n`);
     for (const file of localeFiles(resolve(cwd, "src", slug, "locales"))) {
       if (file.tag !== "en" && isSidecarLocale(file.tag)) {
