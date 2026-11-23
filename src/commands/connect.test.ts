@@ -34,6 +34,7 @@ describe("emitAndUpload", () => {
     const calls: { path: string; type: string | null; body: string }[] = [];
     let registered = false;
     let failLocale: string | null = null;
+    let localeRoute = true;
     server = Bun.serve({
       port: 0,
       async fetch(req) {
@@ -44,6 +45,7 @@ describe("emitAndUpload", () => {
           return Response.json({ result: { data: null } });
         }
         if (path.includes("/locales/")) {
+          if (!localeRoute) return new Response("Not Found", { status: 404 });
           if (!registered) return new Response("not registered", { status: 404 });
           if (failLocale) {
             return Response.json(
@@ -60,6 +62,7 @@ describe("emitAndUpload", () => {
       url: `http://localhost:${server.port}`,
       calls,
       fail: (reason: string) => void (failLocale = reason),
+      withoutLocaleRoute: () => void (localeRoute = false),
     };
   }
 
@@ -98,5 +101,28 @@ describe("emitAndUpload", () => {
     writeFileSync(join(cwd, "src", "climate", "locales", "en.json"), "{oops");
     await expect(emitAndUpload(cwd, url, "tok")).rejects.toThrow("locales/en.json does not parse");
     expect(calls).toEqual([]);
+  });
+
+  test("a dash with no locale route takes the widget once and is never asked for catalogs again", async () => {
+    const { cwd, url, calls, withoutLocaleRoute } = setup();
+    withoutLocaleRoute();
+    expect(await emitAndUpload(cwd, url, "tok")).toEqual(["climate"]);
+    expect(calls.map((c) => c.path)).toEqual([
+      "/bundles/local/local/climate",
+      "/trpc/widget.register",
+      "/bundles/local/local/climate/locales/en",
+    ]);
+    calls.length = 0;
+    expect(await emitAndUpload(cwd, url, "tok")).toEqual(["climate"]);
+    expect(calls.map((c) => c.path)).toEqual([
+      "/bundles/local/local/climate",
+      "/trpc/widget.register",
+    ]);
+  });
+
+  test("any other failed locale push still stops the push", async () => {
+    const { cwd, url, fail } = setup();
+    fail("bad-key");
+    await expect(emitAndUpload(cwd, url, "tok")).rejects.toThrow(/HTTP 400.*bad-key/);
   });
 });

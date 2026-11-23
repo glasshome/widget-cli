@@ -31,6 +31,8 @@ interface RegistryJson {
   widgets: RegistryWidget[];
 }
 
+const hostsWithoutCatalogs = new Set<string>();
+
 /**
  * Upload a single widget bundle to the API and register it.
  */
@@ -102,12 +104,20 @@ async function uploadAndRegister(
     },
   });
 
+  if (hostsWithoutCatalogs.has(api)) return;
   for (const file of builtLocaleFiles(distDir, slug)) {
     const res = await fetch(`${api}/bundles/local/local/${slug}/locales/${file.tag}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: readFileSync(file.path, "utf-8"),
     });
+    if (res.status === 404) {
+      hostsWithoutCatalogs.add(api);
+      log.warn(
+        "This dashboard has no route for widget translations, so it shows your widgets in English. Dash 1.6 and later take them.",
+      );
+      return;
+    }
     if (!res.ok) {
       throw new Error(
         `Failed to upload ${file.tag} catalog for ${slug}: HTTP ${res.status} ${await res.text()}`,
