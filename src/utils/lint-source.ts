@@ -28,7 +28,8 @@ const RAW_STORAGE_MESSAGE =
 
 const LOCALE_RULES: { pattern: RegExp; message: string }[] = [
   {
-    pattern: /\.toLocale(?:(?:Date|Time)?String|(?:Upper|Lower)Case)\(\s*(?:undefined\s*)?[,)]/,
+    pattern:
+      /\.toLocale(?:(?:Date|Time)?String|(?:Upper|Lower)Case)\(\s*(?:(?:undefined|\[\s*\])\s*)?[,)]/,
     message:
       "toLocaleString() and toLocaleUpperCase() with no locale use the browser's language; use formatNumber, formatDate or formatTemperature from the SDK, or pass a locale.",
   },
@@ -43,7 +44,8 @@ const LOCALE_RULES: { pattern: RegExp; message: string }[] = [
       "localeCompare() with no locale sorts in the browser's language; pass the member's locale from useTranslation().",
   },
   {
-    pattern: /\b(?:parseFloat|Number)\(\s*format/,
+    pattern:
+      /\b(?:parseFloat|Number)\(\s*(?:\w+\.)?format(?:Number|Date|Relative|Temperature|Value)\(/,
     message:
       "a formatted number is text for people, not data; keep the raw value and send that to a service call.",
   },

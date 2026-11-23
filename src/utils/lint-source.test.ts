@@ -94,4 +94,16 @@ describe("locale-less formatting", () => {
     expect(lint("parseFloat(formatNumber(x));")).toHaveLength(1);
     expect(lint("Number(formatNumber(x));")).toHaveLength(1);
   });
+
+  test("a value whose name starts with format is data, never a formatted number", () => {
+    expect(lint("Number(formattedValue);")).toEqual([]);
+    expect(lint("parseFloat(formatVersion);")).toEqual([]);
+    expect(lint("Number(i18n.formatNumber(x));")).toHaveLength(1);
+  });
+
+  test("an empty locale list is no locale", () => {
+    expect(lint('d.toLocaleTimeString([], { hour: "2-digit" });')).toHaveLength(1);
+    expect(lint("d.toLocaleDateString([]);")).toHaveLength(1);
+    expect(lint('d.toLocaleTimeString(["de"], { hour: "2-digit" });')).toEqual([]);
+  });
 });
