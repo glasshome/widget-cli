@@ -1,12 +1,16 @@
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { relative, resolve } from "node:path";
 import { log, spinner } from "@clack/prompts";
 import {
   formatSchemaError,
+  isSidecarLocale,
+  nameRefusal,
   publishManifestSchema,
   requiresCapabilities,
   satisfiesSdk,
 } from "@glasshome/widget-contract";
+import { parseCatalog } from "@glasshome/widget-contract/i18n";
+import { reservedRefusals } from "@glasshome/widget-contract/catalog-reserved";
 import semver from "semver";
 import {
   discoverWidgets,
@@ -16,6 +20,8 @@ import {
   readRegistry,
   type WidgetManifest,
 } from "../utils/manifest";
+import { localeFiles, readAuthorEnglish, SIDECAR_LOCALES } from "../utils/catalogs";
+import { widgetSourceFiles } from "../utils/lint-source";
 import { getInstalledSdkVersion } from "../utils/sdk-version";
 
 interface ValidationResult {
@@ -139,6 +145,70 @@ function validateManifest(manifest: WidgetManifest, installedSdk: string | null)
   };
 }
 
+const LITERAL_T = /(?<![.\w$])t\(\s*(["'`])((?:(?!\1)[^\\\n])*)\1\s*[,)]/g;
+const DYNAMIC_T = /(?<![.\w$])t\(\s*(?!["'`)\s])/g;
+
+export function validateCatalogs(
+  cwd: string,
+  slug: string,
+  manifest: WidgetManifest,
+): Pick<ValidationResult, "errors" | "warnings"> {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const localesDir = resolve(cwd, "src", slug, "locales");
+  const english = readAuthorEnglish(cwd, slug);
+
+  for (const refusal of reservedRefusals(manifest as never, english)) {
+    errors.push(`Reserved key "${refusal.key}": ${refusal.reason}`);
+  }
+  const names = [manifest.name, (manifest as { displayName?: string }).displayName];
+  for (const value of names) {
+    const refusal = typeof value === "string" ? nameRefusal(value) : null;
+    if (refusal) errors.push(`Widget name "${value}": ${refusal}`);
+  }
+
+  for (const file of localeFiles(localesDir)) {
+    const rel = `locales/${file.tag}.json`;
+    if (!isSidecarLocale(file.tag, SIDECAR_LOCALES)) {
+      errors.push(`${rel}: "${file.tag}" is not a language GlassHome ships`);
+      continue;
+    }
+    const parsed = parseCatalog(readFileSync(file.path, "utf8"));
+    if (!parsed.ok) {
+      errors.push(`${rel}: ${JSON.stringify(parsed.error)}`);
+      continue;
+    }
+    if (file.tag === "en") continue;
+    for (const key of parsed.value.keys()) {
+      if (!Object.hasOwn(english, key) && !key.startsWith("manifest.")) {
+        warnings.push(`${rel}: key "${key}" is not in locales/en.json`);
+      }
+    }
+  }
+
+  for (const file of widgetSourceFiles(cwd, slug)) {
+    if (!/\.tsx?$/.test(file)) continue;
+    const rel = relative(cwd, file);
+    readFileSync(file, "utf8")
+      .split("\n")
+      .forEach((text, i) => {
+        for (const match of text.matchAll(LITERAL_T)) {
+          const key = match[2] ?? "";
+          if (!Object.hasOwn(english, key)) {
+            errors.push(`${rel}:${i + 1} t("${key}") is not in locales/en.json`);
+          }
+        }
+        if (DYNAMIC_T.test(text)) {
+          warnings.push(
+            `${rel}:${i + 1} t() takes a key that is not a literal, so it is not checked`,
+          );
+        }
+        DYNAMIC_T.lastIndex = 0;
+      });
+  }
+  return { errors, warnings };
+}
+
 export async function runValidate(
   cwd: string,
   widgetName?: string,
@@ -197,6 +267,11 @@ export async function runValidate(
     }
 
     const result = validateManifest(manifest, installedSdk);
+    const built = readRegistry(cwd)?.widgets.find((w) => w.bundleUrl === `./${name}.js`);
+    const catalogs = validateCatalogs(cwd, name, { ...manifest, ...built });
+    result.errors.push(...catalogs.errors);
+    result.warnings.push(...catalogs.warnings);
+    result.passed = result.errors.length === 0;
 
     if (result.errors.length > 0) {
       for (const err of result.errors) {

@@ -1,0 +1,91 @@
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { WidgetManifest } from "../utils/manifest";
+import { validateCatalogs } from "./validate";
+
+let root: string | undefined;
+
+afterEach(() => {
+  if (root) rmSync(root, { recursive: true, force: true });
+  root = undefined;
+});
+
+const manifest: WidgetManifest = {
+  name: "Climate",
+  minSize: { w: 2, h: 2 },
+  maxSize: { w: 4, h: 4 },
+  description: "Thermostat",
+  sdkVersion: "^1.34.0",
+  schema: { type: "object", properties: {} },
+};
+
+function widget(files: Record<string, string>, source = ""): string {
+  root = mkdtempSync(join(tmpdir(), "validate-"));
+  mkdirSync(join(root, "src", "climate", "locales"), { recursive: true });
+  writeFileSync(join(root, "src", "climate", "index.tsx"), source);
+  for (const [name, text] of Object.entries(files)) {
+    writeFileSync(join(root, "src", "climate", "locales", name), text);
+  }
+  return root;
+}
+
+describe("validateCatalogs", () => {
+  test("a clean widget passes", () => {
+    const cwd = widget({ "en.json": '{"hi":"Hello"}' }, 't("hi")');
+    expect(validateCatalogs(cwd, "climate", manifest)).toEqual({ errors: [], warnings: [] });
+  });
+
+  test("a manifest key written in en.json is author-defined", () => {
+    const cwd = widget({ "en.json": '{"manifest.name":"X"}' });
+    const { errors } = validateCatalogs(cwd, "climate", manifest);
+    expect(errors.join("\n")).toContain("author-defined");
+  });
+
+  test("a literal t() key missing from en.json fails with key, file and line", () => {
+    const cwd = widget({ "en.json": '{"hi":"Hello"}' }, 'const a = 1;\nt("missing");');
+    const { errors } = validateCatalogs(cwd, "climate", manifest);
+    expect(errors).toEqual(['src/climate/index.tsx:2 t("missing") is not in locales/en.json']);
+  });
+
+  test("a non-literal t() key is a warning", () => {
+    const cwd = widget({ "en.json": '{"hi":"Hello"}' }, "t(someVar);");
+    const result = validateCatalogs(cwd, "climate", manifest);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings.join("\n")).toContain("src/climate/index.tsx:1");
+  });
+
+  test("a locale key absent from en.json warns; an unparseable locale file errors", () => {
+    const cwd = widget({
+      "en.json": '{"hi":"Hello"}',
+      "fr.json": '{"hi":"Bonjour","extra":"Plus"}',
+      "de.json": "[]",
+    });
+    const result = validateCatalogs(cwd, "climate", manifest);
+    expect(result.warnings.join("\n")).toContain('locales/fr.json: key "extra"');
+    expect(result.errors.join("\n")).toContain("locales/de.json");
+  });
+
+  test("a refused locale file name errors", () => {
+    const cwd = widget({ "en.json": "{}", "en-XA.json": "{}", "pt.json": "{}" });
+    const { errors } = validateCatalogs(cwd, "climate", manifest);
+    expect(errors.join("\n")).toContain("locales/en-XA.json");
+    expect(errors.join("\n")).toContain("locales/pt.json");
+  });
+
+  test("a blank display name fails", () => {
+    const cwd = widget({});
+    const { errors } = validateCatalogs(cwd, "climate", {
+      ...manifest,
+      displayName: "ㅤ",
+    } as WidgetManifest);
+    expect(errors.join("\n")).toContain("blank");
+  });
+
+  test("an ICU brace in a reserved value fails", () => {
+    const cwd = widget({});
+    const { errors } = validateCatalogs(cwd, "climate", { ...manifest, description: "Use {x}" });
+    expect(errors.join("\n")).toContain("icu");
+  });
+});

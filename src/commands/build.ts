@@ -1,5 +1,6 @@
 import { log, spinner } from "@clack/prompts";
 import { buildWidgets } from "@glasshome/widget-sdk/vite";
+import { emitCatalogs } from "../utils/catalogs";
 import { lintAndReport } from "../utils/lint-source";
 import { withQuietStdout } from "../utils/quiet";
 import { typecheckAndReport } from "../utils/typecheck";
@@ -26,6 +27,7 @@ export async function runBuild(cwd: string): Promise<void> {
         plugins: [solid({ solid: { delegateEvents: false } })],
       }),
     );
+    emitCatalogs(cwd);
     s.stop("Build complete");
     lintAndReport(cwd);
   } catch (err) {

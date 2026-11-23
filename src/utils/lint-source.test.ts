@@ -54,3 +54,38 @@ describe("lintAndReport", () => {
     expect(lintAndReport(root, ["missing"])).toEqual([]);
   });
 });
+
+describe("locale-less formatting", () => {
+  const lint = (source: string) => {
+    root = mkdtempSync(join(tmpdir(), "lint-source-"));
+    mkdirSync(join(root, "src", "neon"), { recursive: true });
+    writeFileSync(join(root, "src", "neon", "index.tsx"), source);
+    return lintAndReport(root, ["neon"]);
+  };
+
+  test("toLocaleString with no locale warns and names formatNumber", () => {
+    const findings = lint("const s = x.toLocaleString();");
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("formatNumber");
+  });
+
+  test("toLocaleString with a locale is quiet", () => {
+    expect(lint('const s = x.toLocaleString("de-DE");')).toEqual([]);
+  });
+
+  test("a locale-less Intl formatter warns", () => {
+    expect(lint("new Intl.NumberFormat().format(1);")).toHaveLength(1);
+    expect(lint("new Intl.DateTimeFormat(undefined, { month: 'long' });")).toHaveLength(1);
+    expect(lint('new Intl.NumberFormat("fr");')).toEqual([]);
+  });
+
+  test("localeCompare with one argument warns", () => {
+    expect(lint("a.localeCompare(b);")).toHaveLength(1);
+    expect(lint('a.localeCompare(b, "de");')).toEqual([]);
+  });
+
+  test("parsing a formatted number warns", () => {
+    expect(lint("parseFloat(formatNumber(x));")).toHaveLength(1);
+    expect(lint("Number(formatNumber(x));")).toHaveLength(1);
+  });
+});

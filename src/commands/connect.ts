@@ -14,6 +14,7 @@ import {
   pollDeviceToken,
   storeHostToken,
 } from "../utils/auth";
+import { builtLocaleFiles } from "../utils/catalogs";
 import { lintAndReport } from "../utils/lint-source";
 import { withQuietStdout } from "../utils/quiet";
 
@@ -33,7 +34,7 @@ interface RegistryJson {
 /**
  * Upload a single widget bundle to the API and register it.
  */
-async function uploadAndRegister(
+export async function uploadAndRegister(
   apiUrl: string,
   distDir: string,
   widget: RegistryWidget,
@@ -100,6 +101,17 @@ async function uploadAndRegister(
       manifestJson: JSON.stringify(manifest),
     },
   });
+
+  for (const file of builtLocaleFiles(distDir, slug)) {
+    const res = await fetch(`${api}/bundles/local/local/${slug}/locales/${file.tag}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: readFileSync(file.path, "utf-8"),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to upload ${file.tag} catalog for ${slug}: HTTP ${res.status}`);
+    }
+  }
 }
 
 /**
