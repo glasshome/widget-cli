@@ -10,7 +10,10 @@ import {
   satisfiesSdk,
 } from "@glasshome/widget-contract";
 import { parseCatalog } from "@glasshome/widget-contract/i18n";
-import { reservedRefusals } from "@glasshome/widget-contract/catalog-reserved";
+import {
+  reservedLocaleRefusals,
+  reservedRefusals,
+} from "@glasshome/widget-contract/catalog-reserved";
 import semver from "semver";
 import {
   discoverWidgets,
@@ -182,6 +185,12 @@ export function validateCatalogs(
       continue;
     }
     if (file.tag === "en") continue;
+    for (const refusal of reservedLocaleRefusals(
+      manifest as never,
+      Object.fromEntries(parsed.value),
+    )) {
+      errors.push(`${rel}: reserved key "${refusal.key}": ${refusal.reason}`);
+    }
     for (const key of parsed.value.keys()) {
       if (!Object.hasOwn(english, key) && !key.startsWith("manifest.")) {
         warnings.push(`${rel}: key "${key}" is not in locales/en.json`);

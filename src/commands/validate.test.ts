@@ -43,6 +43,21 @@ describe("validateCatalogs", () => {
     expect(errors.join("\n")).toContain("author-defined");
   });
 
+  test("a locale's reserved name over the limit, ICU or an unknown key fails", () => {
+    const long = "n".repeat(101);
+    const cwd = widget({
+      "en.json": '{"hi":"Hello"}',
+      "fr.json": JSON.stringify({ hi: "Salut", "manifest.name": long }),
+      "es.json": JSON.stringify({ hi: "Hola", "manifest.name": "Clima {x}" }),
+      "de.json": JSON.stringify({ hi: "Hallo", "manifest.config.nope.title": "x" }),
+    });
+    const errors = validateCatalogs(cwd, "climate", manifest).errors.join("\n");
+    expect(errors).toContain("fr.json");
+    expect(errors).toContain("too-long");
+    expect(errors).toContain("icu");
+    expect(errors).toContain("unknown-key");
+  });
+
   test("a literal t() key missing from en.json fails with key, file and line", () => {
     const cwd = widget(
       { "en.json": '{"hi":"Hello"}' },
