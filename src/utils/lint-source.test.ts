@@ -76,6 +76,7 @@ describe("locale-less formatting", () => {
   test("a locale-less Intl formatter warns", () => {
     expect(lint("new Intl.NumberFormat().format(1);")).toHaveLength(1);
     expect(lint("new Intl.DateTimeFormat(undefined, { month: 'long' });")).toHaveLength(1);
+    expect(lint("new Intl.DateTimeFormat([], { month: 'long' });")).toHaveLength(1);
     expect(lint('new Intl.NumberFormat("fr");')).toEqual([]);
   });
 

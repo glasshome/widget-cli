@@ -34,7 +34,7 @@ const LOCALE_RULES: { pattern: RegExp; message: string }[] = [
       "toLocaleString() and toLocaleUpperCase() with no locale use the browser's language; use formatNumber, formatDate or formatTemperature from the SDK, or pass a locale.",
   },
   {
-    pattern: /\bIntl\.\w+\(\s*(?:undefined\s*)?[,)](?!\.resolvedOptions)/,
+    pattern: /\bIntl\.\w+\(\s*(?:(?:undefined|\[\s*\])\s*)?[,)](?!\.resolvedOptions)/,
     message:
       "an Intl formatter with no locale uses the browser's language; use formatNumber or formatDate from the SDK, or pass a locale.",
   },
