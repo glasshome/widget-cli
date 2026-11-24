@@ -14,6 +14,7 @@ import {
   readManifest,
   writeManifest,
 } from "../utils/manifest";
+import { entries, refusedSidecars, uploadSidecars, walkSidecars } from "../utils/sidecars";
 import { settleSdkFloor } from "../utils/sdk-floor";
 import { typecheckAndReport } from "../utils/typecheck";
 import { enforceCliVersion } from "../utils/version";
@@ -267,6 +268,13 @@ export async function runPublish(
     ? createHash("sha256").update(cssBuffer).digest("hex")
     : undefined;
 
+  const sidecars = walkSidecars(resolve(cwd, "dist"), widgetName);
+  const refused = refusedSidecars(sidecars);
+  if (refused.length > 0) {
+    log.error(`Refused sidecar files: ${refused.join(", ")}`);
+    process.exit(1);
+  }
+
   s.start(`Publishing ${builtManifest.name}@${version}...`);
 
   let publishData: Awaited<ReturnType<typeof requestPublish>>;
@@ -286,6 +294,7 @@ export async function runPublish(
         sha256Hash,
         ...(cssBuffer && cssSha256Hash ? { cssSize: cssBuffer.byteLength, cssSha256Hash } : {}),
         manifestJson: JSON.stringify(builtManifest),
+        ...(sidecars.length > 0 ? { files: entries(sidecars) } : {}),
       }),
     );
   } catch (err) {
@@ -322,9 +331,26 @@ export async function runPublish(
     }
   }
 
+  if (sidecars.length > 0) {
+    s.message(`Uploading ${sidecars.length} files for ${builtManifest.name}...`);
+    try {
+      await uploadSidecars(publishData.uploads, sidecars);
+    } catch (err) {
+      s.stop(`Sidecar upload failed: ${errorMessage(err)}`);
+      process.exit(1);
+    }
+  }
+
   s.message(`Confirming ${builtManifest.name}...`);
   try {
-    const result = await asHub((token) => confirmPublish(hubUrl, token, publishData.versionId));
+    const result = await asHub((token) =>
+      confirmPublish(
+        hubUrl,
+        token,
+        publishData.versionId,
+        sidecars.length > 0 ? entries(sidecars) : undefined,
+      ),
+    );
     s.stop(`Published ${builtManifest.name}@${version}`);
     log.info(`CDN: ${result.bundleUrl}`);
     if (result.cssUrl) log.info(`CSS: ${result.cssUrl}`);

@@ -1,8 +1,10 @@
 import { log, spinner } from "@clack/prompts";
 import { buildWidgets } from "@glasshome/widget-sdk/vite";
 import { emitCatalogs } from "../utils/catalogs";
+import { readRegistry } from "../utils/manifest";
 import { lintAndReport } from "../utils/lint-source";
 import { withQuietStdout } from "../utils/quiet";
+import { emitFiles } from "../utils/sidecars";
 import { typecheckAndReport } from "../utils/typecheck";
 
 export async function runBuild(cwd: string): Promise<void> {
@@ -28,6 +30,9 @@ export async function runBuild(cwd: string): Promise<void> {
       }),
     );
     emitCatalogs(cwd);
+    for (const widget of readRegistry(cwd)?.widgets ?? []) {
+      emitFiles(cwd, widget.bundleUrl.replace(/^\.\//, "").replace(/\.js$/, ""));
+    }
     s.stop("Build complete");
     lintAndReport(cwd);
   } catch (err) {

@@ -29,6 +29,7 @@ export async function fetchDashReleases(
 }
 
 import type { GridSize } from "@glasshome/widget-sdk";
+import type { SidecarEntry } from "./sidecars";
 
 interface PublishRequestParams {
   scope: string;
@@ -45,6 +46,7 @@ interface PublishRequestParams {
   cssSize?: number;
   cssSha256Hash?: string;
   manifestJson: string;
+  files?: SidecarEntry[];
 }
 
 interface PublishRequestResponse {
@@ -54,6 +56,7 @@ interface PublishRequestResponse {
   versionId: string;
   cssUploadUrl?: string;
   cssUrl?: string;
+  uploads?: Record<string, string>;
   /** Something the Hub wants the publisher to act on, such as renewing the login. */
   notice?: string;
 }
@@ -102,6 +105,7 @@ export async function confirmPublish(
   hubUrl: string,
   token: string,
   versionId: string,
+  files?: SidecarEntry[],
 ): Promise<PublishConfirmResponse> {
   const res = await fetch(`${hubUrl}/api/widgets/publish`, {
     method: "POST",
@@ -109,7 +113,7 @@ export async function confirmPublish(
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ action: "confirm", versionId }),
+    body: JSON.stringify({ action: "confirm", versionId, ...(files ? { files } : {}) }),
   });
 
   if (!res.ok) {
