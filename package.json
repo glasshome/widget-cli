@@ -35,7 +35,7 @@
   },
   "scripts": {
     "cli": "bun bin/cli.ts",
-    "test": "bun test",
+    "test": "bun test --isolate",
     "typecheck": "tsc --noEmit",
     "check:dead": "fallow dead-code --fail-on-issues",
     "lint": "oxlint --type-aware . && oxfmt --check ."
