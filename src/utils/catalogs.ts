@@ -21,6 +21,7 @@ export interface LocaleFile {
 export function localeFiles(dir: string): LocaleFile[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
+    .sort()
     .filter((file) => file.endsWith(".json"))
     .map((file) => ({ tag: file.slice(0, -".json".length), path: join(dir, file) }));
 }

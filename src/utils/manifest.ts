@@ -33,10 +33,12 @@ export function discoverWidgets(cwd: string): string[] {
   const srcDir = resolve(cwd, "src");
   if (!existsSync(srcDir)) return [];
 
-  return readdirSync(srcDir).filter((entry) => {
-    const dir = join(srcDir, entry);
-    return statSync(dir).isDirectory() && existsSync(join(dir, "manifest.json"));
-  });
+  return readdirSync(srcDir)
+    .sort()
+    .filter((entry) => {
+      const dir = join(srcDir, entry);
+      return statSync(dir).isDirectory() && existsSync(join(dir, "manifest.json"));
+    });
 }
 
 /** Read a single widget's manifest.json from its source directory. */
