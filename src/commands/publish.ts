@@ -14,7 +14,13 @@ import {
   readManifest,
   writeManifest,
 } from "../utils/manifest";
-import { entries, refusedSidecars, uploadSidecars, walkSidecars } from "../utils/sidecars";
+import {
+  entries,
+  missingSidecarSupport,
+  refusedSidecars,
+  uploadSidecars,
+  walkSidecars,
+} from "../utils/sidecars";
 import { settleSdkFloor } from "../utils/sdk-floor";
 import { typecheckAndReport } from "../utils/typecheck";
 import { enforceCliVersion } from "../utils/version";
@@ -307,6 +313,11 @@ export async function runPublish(
   }
 
   if (publishData.notice) log.warn(publishData.notice);
+  const unsupported = missingSidecarSupport(sidecars, publishData.uploads);
+  if (unsupported) {
+    s.stop(`Publish stopped before uploading: ${unsupported}`);
+    process.exit(1);
+  }
   s.message(`Uploading ${builtManifest.name} to CDN...`);
   try {
     await uploadToR2(publishData.uploadUrl, bundleBuffer);

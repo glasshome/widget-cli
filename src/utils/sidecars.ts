@@ -82,3 +82,11 @@ export async function uploadSidecars(
     await uploadToR2(url, sidecar.data, CONTENT_TYPES[extension]);
   }
 }
+
+export function missingSidecarSupport(
+  sidecars: readonly Sidecar[],
+  uploads: Record<string, string> | undefined,
+): string | null {
+  if (sidecars.length === 0 || uploads !== undefined) return null;
+  return "this Hub does not accept widget images and locale catalogs yet, update the Hub first";
+}
