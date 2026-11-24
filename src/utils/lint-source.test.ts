@@ -54,3 +54,57 @@ describe("lintAndReport", () => {
     expect(lintAndReport(root, ["missing"])).toEqual([]);
   });
 });
+
+describe("locale-less formatting", () => {
+  const lint = (source: string) => {
+    root = mkdtempSync(join(tmpdir(), "lint-source-"));
+    mkdirSync(join(root, "src", "neon"), { recursive: true });
+    writeFileSync(join(root, "src", "neon", "index.tsx"), source);
+    return lintAndReport(root, ["neon"]);
+  };
+
+  test("toLocaleString with no locale warns and names formatNumber", () => {
+    const findings = lint("const s = x.toLocaleString();");
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("formatNumber");
+  });
+
+  test("toLocaleString with a locale is quiet", () => {
+    expect(lint('const s = x.toLocaleString("de-DE");')).toEqual([]);
+  });
+
+  test("a locale-less Intl formatter warns", () => {
+    expect(lint("new Intl.NumberFormat().format(1);")).toHaveLength(1);
+    expect(lint("new Intl.DateTimeFormat(undefined, { month: 'long' });")).toHaveLength(1);
+    expect(lint("new Intl.DateTimeFormat([], { month: 'long' });")).toHaveLength(1);
+    expect(lint('new Intl.NumberFormat("fr");')).toEqual([]);
+  });
+
+  test("locale-less case conversion warns", () => {
+    expect(lint("x.toLocaleUpperCase();")).toHaveLength(1);
+    expect(lint('x.toLocaleLowerCase("tr");')).toEqual([]);
+  });
+
+  test("localeCompare with one argument warns", () => {
+    expect(lint("a.localeCompare(b);")).toHaveLength(1);
+    expect(lint('a.localeCompare(b, "de");')).toEqual([]);
+    expect(lint("a.localeCompare(b, undefined, { numeric: true });")).toHaveLength(1);
+  });
+
+  test("parsing a formatted number warns", () => {
+    expect(lint("parseFloat(formatNumber(x));")).toHaveLength(1);
+    expect(lint("Number(formatNumber(x));")).toHaveLength(1);
+  });
+
+  test("a value whose name starts with format is data, never a formatted number", () => {
+    expect(lint("Number(formattedValue);")).toEqual([]);
+    expect(lint("parseFloat(formatVersion);")).toEqual([]);
+    expect(lint("Number(i18n.formatNumber(x));")).toHaveLength(1);
+  });
+
+  test("an empty locale list is no locale", () => {
+    expect(lint('d.toLocaleTimeString([], { hour: "2-digit" });')).toHaveLength(1);
+    expect(lint("d.toLocaleDateString([]);")).toHaveLength(1);
+    expect(lint('d.toLocaleTimeString(["de"], { hour: "2-digit" });')).toEqual([]);
+  });
+});

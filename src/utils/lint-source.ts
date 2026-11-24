@@ -26,7 +26,32 @@ const RAW_STORAGE = /\b(?:localStorage|sessionStorage)\b/;
 const RAW_STORAGE_MESSAGE =
   "localStorage and sessionStorage are in memory and empty after every reload; keep what must last with useWidgetState (widget-sdk 1.28.0 and later).";
 
-function widgetSourceFiles(cwd: string, widget: string): string[] {
+const LOCALE_RULES: { pattern: RegExp; message: string }[] = [
+  {
+    pattern:
+      /\.toLocale(?:(?:Date|Time)?String|(?:Upper|Lower)Case)\(\s*(?:(?:undefined|\[\s*\])\s*)?[,)]/,
+    message:
+      "toLocaleString() and toLocaleUpperCase() with no locale use the browser's language; use formatNumber, formatDate or formatTemperature from the SDK, or pass a locale.",
+  },
+  {
+    pattern: /\bIntl\.\w+\(\s*(?:(?:undefined|\[\s*\])\s*)?[,)](?!\.resolvedOptions)/,
+    message:
+      "an Intl formatter with no locale uses the browser's language; use formatNumber or formatDate from the SDK, or pass a locale.",
+  },
+  {
+    pattern: /\.localeCompare\((?:[^,]*\)|[^,]*,\s*undefined\b)/,
+    message:
+      "localeCompare() with no locale sorts in the browser's language; pass the member's locale from useTranslation().",
+  },
+  {
+    pattern:
+      /\b(?:parseFloat|Number)\(\s*(?:\w+\.)?format(?:Number|Date|Relative|Temperature|Value)\(/,
+    message:
+      "a formatted number is text for people, not data; keep the raw value and send that to a service call.",
+  },
+];
+
+export function widgetSourceFiles(cwd: string, widget: string): string[] {
   const dir = resolve(cwd, "src", widget);
   const out: string[] = [];
   if (!existsSync(dir)) return out;
@@ -65,6 +90,16 @@ function lintWidgetSource(cwd: string, widget: string): SourceLintFinding[] {
           line,
           message: `[@glasshome/widget-sdk] ${ZOD_IMPORT_MESSAGE}`,
         });
+      }
+      for (const rule of LOCALE_RULES) {
+        if (rule.pattern.test(text)) {
+          findings.push({
+            widget,
+            file: rel,
+            line,
+            message: `[@glasshome/widget-sdk] ${rule.message}`,
+          });
+        }
       }
       if (RAW_STORAGE.test(text)) {
         findings.push({
