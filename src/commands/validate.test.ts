@@ -119,6 +119,22 @@ describe("validateCatalogs", () => {
     expect(errors.join("\n")).toContain("locales/pt.json");
   });
 
+  test("pipeline bookkeeping beside a locale is not a locale", () => {
+    const cwd = widget({
+      "en.json": "{}",
+      "fr.json": '{"hi":"Bonjour"}',
+      "fr.hash.json": "{}",
+      "fr.pins.json": "{}",
+    });
+    expect(validateCatalogs(cwd, "climate", manifest).errors).toEqual([]);
+  });
+
+  test("an unshipped language still fails", () => {
+    const cwd = widget({ "en.json": "{}", "pt.json": "{}", "pt.hash.json": "{}" });
+    const { errors } = validateCatalogs(cwd, "climate", manifest);
+    expect(errors.join("\n")).toContain('"pt" is not a language GlassHome ships');
+  });
+
   test("a blank display name fails", () => {
     const cwd = widget({});
     const { errors } = validateCatalogs(cwd, "climate", {

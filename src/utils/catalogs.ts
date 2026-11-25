@@ -22,7 +22,9 @@ export function localeFiles(dir: string): LocaleFile[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .sort()
-    .filter((file) => file.endsWith(".json"))
+    .filter(
+      (file) => file.endsWith(".json") && !file.endsWith(".hash.json") && !file.endsWith(".pins.json"),
+    )
     .map((file) => ({ tag: file.slice(0, -".json".length), path: join(dir, file) }));
 }
 
