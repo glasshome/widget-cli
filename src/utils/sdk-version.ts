@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
+import semver from "semver";
 import { isBunGlobalCache } from "./resolution";
 
 /**
@@ -44,17 +45,18 @@ export function getInstalledSdkVersion(cwd: string): string | null {
   }
 }
 
-/**
- * The SDK this CLI itself was built against, used when scaffolding a project
- * that has nothing installed yet.
- */
+/** The floor of the newest SDK major this CLI builds, used when scaffolding a project that has nothing installed yet. */
 function getCliSdkVersion(): string | null {
   try {
     const pkgPath = resolve(import.meta.dir, "../../package.json");
     if (!existsSync(pkgPath)) return null;
-    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-    const range = pkg.dependencies?.[SDK_PKG] ?? pkg.peerDependencies?.[SDK_PKG];
-    return typeof range === "string" ? range.replace(/^[\^~]/, "") : null;
+    const range = JSON.parse(readFileSync(pkgPath, "utf-8")).peerDependencies?.[SDK_PKG];
+    if (typeof range !== "string") return null;
+    const floors = range.split("||").map((part) => semver.minVersion(part.trim()));
+    return floors.reduce<string | null>(
+      (newest, floor) => (floor && (!newest || semver.gt(floor, newest)) ? floor.version : newest),
+      null,
+    );
   } catch {
     return null;
   }

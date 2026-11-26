@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { buildWidgets } from "@glasshome/widget-sdk/vite";
 import semver from "semver";
-import vitePluginSolid from "vite-plugin-solid";
+import { widgetBuildOptions } from "../utils/widget-build";
 import { startStageServer } from "./stage-server";
 import { assertWidgetSdk, fetchStage, readStage, stageCacheRoot } from "./stage";
 
@@ -67,7 +67,7 @@ export async function serveHarness(
     srcDir: "src",
     outDir: "dist",
     ...(only.length ? { only } : {}),
-    plugins: [vitePluginSolid({ solid: { delegateEvents: false } })],
+    ...(await widgetBuildOptions(projectDir)),
   });
 
   const widgets = readdirSync(distDir)

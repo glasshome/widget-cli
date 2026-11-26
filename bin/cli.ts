@@ -43,7 +43,7 @@ Commands:
                          --lower-floor publishes at a derived sdkVersion floor below the manifest's
   login [hub-url]        Authenticate with GlassHome Hub
   info [name]            Show widget metadata and bundle info
-  upgrade                Upgrade @glasshome/widget-sdk (latest, or --to <version>)
+  upgrade                Upgrade @glasshome/widget-sdk within its major (or --to <version>)
   migrate config         Rewrite widgets' raw-zod config to defineConfig + field.*
                          --name <widget> targets one; --dry previews without writing
   help                   Show this help message
@@ -69,7 +69,7 @@ Examples:
   glasshome-widget login
   glasshome-widget login https://my-hub.example.com
   glasshome-widget upgrade
-  glasshome-widget upgrade --to 1.10.3
+  glasshome-widget upgrade --to 2.0.0
   glasshome-widget publish --dir packages/widgets
 `.trim();
 

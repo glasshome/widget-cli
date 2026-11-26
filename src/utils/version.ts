@@ -164,9 +164,14 @@ export async function notifySdkUpdate(cwd: string): Promise<void> {
   if (!declared) return;
 
   const { sdk: latest } = await getLatestVersions();
-  if (latest && semver.valid(latest) && semver.gt(latest, declared)) {
+  if (!latest || !semver.valid(latest) || !semver.gt(latest, declared)) return;
+  if (semver.major(latest) > semver.major(declared)) {
     log.warn(
-      `A newer widget SDK is available (${declared} → ${latest}). Update:  bun widget upgrade`,
+      `Widget SDK ${semver.major(latest)} is out (${latest}). Moving to it changes your widget code: https://glasshome.app/docs/widgets/widget-sdk-2-0`,
     );
+    return;
   }
+  log.warn(
+    `A newer widget SDK is available (${declared} → ${latest}). Update:  bun widget upgrade`,
+  );
 }

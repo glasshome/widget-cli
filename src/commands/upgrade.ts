@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { log, spinner } from "@clack/prompts";
+import semver from "semver";
 import { installedGuide, writeAgentStubs } from "../utils/agent-guide";
 import { getInstalledSdkVersion } from "../utils/sdk-version";
 import { runValidate } from "./validate";
@@ -92,7 +93,7 @@ function bumpSdkDependency(cwd: string, section: DependencySection, target: stri
 }
 
 export interface UpgradeOptions {
-  /** Version or dist-tag to move to in a standalone project. Default "latest". */
+  /** Version, range or dist-tag to move to in a standalone project. Default: the newest of the installed major. */
   to?: string;
 }
 
@@ -159,7 +160,9 @@ export async function runUpgrade(cwd: string, options: UpgradeOptions = {}): Pro
     return;
   }
 
-  if (!bumpSdkDependency(cwd, section, options.to ?? "latest")) process.exit(1);
+  const before = getInstalledSdkVersion(cwd);
+  const target = options.to ?? (before ? `^${semver.major(before)}` : "latest");
+  if (!bumpSdkDependency(cwd, section, target)) process.exit(1);
 
   const installed = getInstalledSdkVersion(cwd);
   if (!installed) {

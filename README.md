@@ -30,7 +30,9 @@ bunx @glasshome/widget-cli create
 | `publish [hub-url]` | Select and publish a widget to GlassHome Hub |
 | `login [hub-url]` | Authenticate with GlassHome Hub (required before publish) |
 | `info [name]` | Show widget metadata and bundle info |
-| `upgrade` | Upgrade @glasshome/widget-sdk to latest version |
+| `upgrade` | Upgrade @glasshome/widget-sdk to the newest release of its major |
+
+`build`, `connect` and `preview` compile with the Solid plugin of the installed `@glasshome/widget-sdk` major: `vite-plugin-solid` for SDK 1, `@solidjs/vite-plugin` for SDK 2. Install the one your project needs, with Vite 8 or 9. New projects start on SDK 2.
 
 Running `glasshome-widget` with no command inside a widget project shows help. Outside a widget project, it starts the create wizard.
 

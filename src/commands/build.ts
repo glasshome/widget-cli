@@ -3,6 +3,7 @@ import { buildWidgets } from "@glasshome/widget-sdk/vite";
 import { lintAndReport } from "../utils/lint-source";
 import { withQuietStdout } from "../utils/quiet";
 import { typecheckAndReport } from "../utils/typecheck";
+import { widgetBuildOptions } from "../utils/widget-build";
 
 export async function runBuild(cwd: string): Promise<void> {
   const check = spinner();
@@ -15,17 +16,9 @@ export async function runBuild(cwd: string): Promise<void> {
   s.start("Building widgets...");
 
   try {
-    const solid = (await import("vite-plugin-solid")).default;
+    const options = await widgetBuildOptions(cwd);
     process.chdir(cwd);
-    await withQuietStdout(() =>
-      buildWidgets({
-        srcDir: "src",
-        outDir: "dist",
-        // delegateEvents: false, widgets run in closed shadow roots where Solid's
-        // document-level event delegation cannot see the target. Must match connect.ts.
-        plugins: [solid({ solid: { delegateEvents: false } })],
-      }),
-    );
+    await withQuietStdout(() => buildWidgets({ srcDir: "src", outDir: "dist", ...options }));
     s.stop("Build complete");
     lintAndReport(cwd);
   } catch (err) {

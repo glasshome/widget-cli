@@ -16,6 +16,7 @@ import {
 } from "../utils/auth";
 import { lintAndReport } from "../utils/lint-source";
 import { withQuietStdout } from "../utils/quiet";
+import { widgetBuildOptions } from "../utils/widget-build";
 
 interface RegistryWidget {
   name: string;
@@ -383,16 +384,14 @@ export async function runConnect(
   opts: { reAuth?: boolean } = {},
 ): Promise<void> {
   const distDir = resolve(cwd, "dist");
-  const solid = (await import("vite-plugin-solid")).default;
-  // delegateEvents: false, widgets run in closed shadow roots where Solid's
-  // document-level event delegation cannot see the target.
-  const buildOpts: BuildOpts = {
-    srcDir: "src",
-    outDir: "dist",
-    plugins: [solid({ solid: { delegateEvents: false } })],
-  };
-
   const s = spinner();
+  let buildOpts: BuildOpts;
+  try {
+    buildOpts = { srcDir: "src", outDir: "dist", ...(await widgetBuildOptions(cwd)) };
+  } catch (err) {
+    log.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
   await buildOrExit(cwd, buildOpts, s);
   lintAndReport(cwd);
 

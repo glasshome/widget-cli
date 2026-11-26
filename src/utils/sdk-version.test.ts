@@ -72,6 +72,12 @@ describe("defaultSdkRange", () => {
   });
 });
 
+describe("defaultSdkRange for a new project", () => {
+  test("floors at the newest SDK major this CLI builds", () => {
+    expect(defaultSdkRange(project({}))).toBe("^2.0.0");
+  });
+});
+
 describe("isBunGlobalCache", () => {
   test("recognises the cache directory", () => {
     const cache = join(tmpDir, "cache");
