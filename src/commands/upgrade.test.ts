@@ -28,6 +28,28 @@ describe("runUpgrade", () => {
 
     expect(JSON.parse(readFileSync(manifestPath, "utf-8")).sdkVersion).toBe("^1.5.0");
   });
+
+  test("moves a manifest floored at another major onto the workspace SDK's major", async () => {
+    const root = join(tmpDir, "major");
+    mkdirSync(join(root, "widget-sdk"), { recursive: true });
+    writeFileSync(join(root, "package.json"), JSON.stringify({ workspaces: ["widgets"] }));
+    writeFileSync(
+      join(root, "widget-sdk", "package.json"),
+      JSON.stringify({ version: "1.34.1", glasshome: { sdkMajor: 2 } }),
+    );
+    const project = join(root, "widgets");
+    mkdirSync(join(project, "src", "demo"), { recursive: true });
+    writeFileSync(
+      join(project, "package.json"),
+      JSON.stringify({ peerDependencies: { "@glasshome/widget-sdk": "^1.9.0" } }),
+    );
+    const manifestPath = join(project, "src", "demo", "manifest.json");
+    writeFileSync(manifestPath, JSON.stringify({ name: "Demo", sdkVersion: "^1.5.0" }));
+
+    await runUpgrade(project);
+
+    expect(JSON.parse(readFileSync(manifestPath, "utf-8")).sdkVersion).toBe("^2.0.0");
+  });
 });
 
 describe("sdkDependencySection", () => {
