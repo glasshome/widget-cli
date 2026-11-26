@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
+import { buildSdkVersion } from "@glasshome/widget-contract/sdk-floor";
 import semver from "semver";
 import { isBunGlobalCache } from "./resolution";
 
@@ -26,7 +27,7 @@ const SDK_PKG = "@glasshome/widget-sdk";
 export const FALLBACK_SDK_RANGE = "^1.0.0";
 
 /**
- * Version of the installed SDK, or null when none is installed.
+ * Version the installed SDK builds as (see buildSdkVersion), or null when none is installed.
  *
  * An ancestor's `node_modules` is fine and expected (hoisted installs put it
  * there), as is a workspace symlink resolving to the SDK's own source tree.
@@ -38,8 +39,7 @@ export function getInstalledSdkVersion(cwd: string): string | null {
     const require = createRequire(join(cwd, "package.json"));
     const pkgPath = resolve(require.resolve(`${SDK_PKG}/package.json`));
     if (isBunGlobalCache(pkgPath)) return null;
-    const version = JSON.parse(readFileSync(pkgPath, "utf-8")).version;
-    return typeof version === "string" ? version : null;
+    return buildSdkVersion(JSON.parse(readFileSync(pkgPath, "utf-8")));
   } catch {
     return null;
   }
