@@ -3,6 +3,8 @@ import { dirname, join, resolve } from "node:path";
 import { log, spinner } from "@clack/prompts";
 import semver from "semver";
 import { installedGuide, writeAgentStubs } from "../utils/agent-guide";
+import { buildSdkVersion } from "@glasshome/widget-contract/sdk-floor";
+import { discoverWidgets, readManifest, writeManifest } from "../utils/manifest";
 import { getInstalledSdkVersion } from "../utils/sdk-version";
 import { runValidate } from "./validate";
 
@@ -35,8 +37,8 @@ function findWorkspaceSdkVersion(monorepoRoot: string): string | null {
   for (const sdkPath of sdkPkgPaths) {
     if (existsSync(sdkPath)) {
       try {
-        const sdkPkg = JSON.parse(readFileSync(sdkPath, "utf-8"));
-        if (sdkPkg.version) return sdkPkg.version;
+        const version = buildSdkVersion(JSON.parse(readFileSync(sdkPath, "utf-8")));
+        if (version) return version;
       } catch {}
     }
   }
@@ -56,6 +58,20 @@ function refreshAgentStubs(cwd: string): void {
 }
 
 const SDK_PKG = "@glasshome/widget-sdk";
+
+/** Moves each manifest whose sdkVersion floors at another SDK major onto the installed SDK. */
+function moveManifestsToMajor(cwd: string, installed: string): void {
+  const major = semver.major(installed);
+  for (const name of discoverWidgets(cwd)) {
+    const manifest = readManifest(cwd, name);
+    const range = manifest.sdkVersion;
+    const floor = range && semver.validRange(range) ? semver.minVersion(range) : null;
+    if (!floor || floor.major === major) continue;
+    manifest.sdkVersion = `^${installed}`;
+    writeManifest(cwd, name, manifest);
+    log.info(`src/${name}/manifest.json: sdkVersion ${range} to ^${installed}`);
+  }
+}
 
 type DependencySection = "peerDependencies" | "devDependencies" | "dependencies";
 type PackageManifest = Partial<Record<DependencySection, Record<string, string>>>;
@@ -148,6 +164,7 @@ export async function runUpgrade(cwd: string, options: UpgradeOptions = {}): Pro
     s.stop("Dependencies synced");
 
     refreshAgentStubs(cwd);
+    moveManifestsToMajor(cwd, getInstalledSdkVersion(cwd) ?? sdkVersion);
 
     // Run validate to check compatibility
     log.info("Checking compatibility...");
@@ -170,6 +187,7 @@ export async function runUpgrade(cwd: string, options: UpgradeOptions = {}): Pro
     return;
   }
   refreshAgentStubs(cwd);
+  moveManifestsToMajor(cwd, installed);
   const valid = await runValidate(cwd);
   if (valid) {
     log.success(`Upgraded to @glasshome/widget-sdk@${installed}`);
