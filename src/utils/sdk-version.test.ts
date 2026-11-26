@@ -15,7 +15,7 @@ let fixtureCount = 0;
 
 /** A fake installed SDK, either under node_modules or as a workspace symlink
     to a source tree, which is how a monorepo actually resolves it. */
-function project(opts: { version?: string; asWorkspaceLink?: boolean }): string {
+function project(opts: { version?: string; sdkMajor?: number; asWorkspaceLink?: boolean }): string {
   const dir = join(tmpDir, `project-${fixtureCount++}`);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "fixture" }));
@@ -27,7 +27,11 @@ function project(opts: { version?: string; asWorkspaceLink?: boolean }): string 
     mkdirSync(target, { recursive: true });
     writeFileSync(
       join(target, "package.json"),
-      JSON.stringify({ name: "@glasshome/widget-sdk", version: opts.version }),
+      JSON.stringify({
+        name: "@glasshome/widget-sdk",
+        version: opts.version,
+        ...(opts.sdkMajor ? { glasshome: { sdkMajor: opts.sdkMajor } } : {}),
+      }),
     );
     if (opts.asWorkspaceLink) {
       mkdirSync(join(dir, "node_modules", "@glasshome"), { recursive: true });
@@ -50,6 +54,12 @@ describe("getInstalledSdkVersion", () => {
     expect(getInstalledSdkVersion(project({ version: "1.7.0", asWorkspaceLink: true }))).toBe(
       "1.7.0",
     );
+  });
+
+  test("reads a major the SDK declares ahead of its version as that major's first release", () => {
+    expect(
+      getInstalledSdkVersion(project({ version: "1.34.1", sdkMajor: 2, asWorkspaceLink: true })),
+    ).toBe("2.0.0");
   });
 
   test("returns null when no SDK is installed", () => {
