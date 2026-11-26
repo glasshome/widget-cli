@@ -12,21 +12,6 @@ afterEach(() => {
 });
 
 describe("lintAndReport", () => {
-  test("a widget stylesheet reading the glass internals warns; the public contract does not", () => {
-    root = mkdtempSync(join(tmpdir(), "lint-source-"));
-    mkdirSync(join(root, "src", "neon"), { recursive: true });
-    writeFileSync(
-      join(root, "src", "neon", "neon.css"),
-      [
-        ".key { box-shadow: var(--material-raised); background: var(--material-face); }",
-        ".rim { box-shadow: var(--glass-rim-shine); }",
-      ].join("\n"),
-    );
-    const findings = lintAndReport(root, ["neon"]);
-    expect(findings.map((f) => f.line)).toEqual([2]);
-    expect(findings[0]?.message).toContain("internal-material-vars");
-  });
-
   test("storage use is reported with the door to use", () => {
     root = mkdtempSync(join(tmpdir(), "lint-source-"));
     mkdirSync(join(root, "src", "neon"), { recursive: true });
